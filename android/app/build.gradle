@@ -24,7 +24,7 @@ if (flutterVersionName == null) {
 
 android {
     namespace "com.example.scamba"
-    compileSdkVersion flutter.compileSdkVersion
+    compileSdkVersion 34  
     ndkVersion flutter.ndkVersion
 
     compileOptions {
@@ -64,4 +64,6 @@ flutter {
     source '../..'
 }
 
-dependencies {}
+dependencies {
+    implementation 'org.tensorflow:tensorflow-lite:2.13.0'
+}

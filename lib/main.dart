@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:tflite/tflite.dart';
-import 'dart:async';
+import 'package:tflite_flutter/tflite_flutter.dart';
+import 'dart:typed_data';
+import 'dart:convert';
 
 void main() {
   runApp(MyApp());
@@ -24,9 +25,20 @@ class SpamDetectionApp extends StatefulWidget {
 class _SpamDetectionAppState extends State<SpamDetectionApp> {
   TextEditingController _controller = TextEditingController();
   bool _isLoading = false;
+  bool _modelLoaded = false;
   String _result = "";
   double _confidence = 0.0;
   int _inferenceTime = 0;
+  Interpreter? _interpreter;
+
+  Map<String, int> vocab = {
+    "[PAD]": 0,
+    "[UNK]": 1,
+    "[CLS]": 2,
+    "[SEP]": 3,
+    "spam": 4,
+    "ham": 5,
+  };
 
   @override
   void initState() {
@@ -35,35 +47,62 @@ class _SpamDetectionAppState extends State<SpamDetectionApp> {
   }
 
   Future<void> loadModel() async {
-    await Tflite.loadModel(
-      model: "assets/spam_model.tflite",
-      labels: "assets/labels.txt",
-    );
+    try {
+      _interpreter = await Interpreter.fromAsset("assets/lite_scam_ham_bert_model_tv0.tflite");
+      print("Model Loaded Successfully!");
+      setState(() {
+        _modelLoaded = true;
+      });
+    } catch (e) {
+      print("Error loading model: $e");
+    }
+  }
+
+  List<int> tokenizeText(String text) {
+    List<String> words = text.toLowerCase().split(" ");
+    List<int> tokenized = [vocab["[CLS]"] ?? 2]; // BERT CLS token
+
+    for (var word in words) {
+      tokenized.add(vocab[word] ?? vocab["[UNK]"]!); // Convert to token ID, default to UNK
+    }
+
+    tokenized.add(vocab["[SEP]"] ?? 3); // BERT SEP token
+    while (tokenized.length < 128) {
+      tokenized.add(vocab["[PAD]"] ?? 0); // Pad to 128 tokens
+    }
+    
+    return tokenized.sublist(0, 128); // Ensure input is 128 tokens
   }
 
   Future<void> classifyText(String text) async {
+    if (!_modelLoaded || _interpreter == null) {
+      print("Error: Model not loaded yet!");
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
+
     final startTime = DateTime.now().millisecondsSinceEpoch;
 
-    var predictions = await Tflite.runModelOnText(
-      text: text,
-      numResults: 2,
-      threshold: 0.5,
-    );
+    List<int> tokenizedInput = tokenizeText(text);
+    Uint8List inputTensor = Uint8List.fromList(tokenizedInput);
+
+    var output = List.filled(2, 0).reshape([1, 2]);
+
+    _interpreter!.run([inputTensor], output);
 
     final endTime = DateTime.now().millisecondsSinceEpoch;
+
+    int predictedLabelIndex = output[0][0]; // Assuming classification index
+    double confidence = output[0][1] / 255.0; // Normalize
+
     setState(() {
       _isLoading = false;
-      if (predictions != null && predictions.isNotEmpty) {
-        _result = predictions[0]['label'];
-        _confidence = predictions[0]['confidence'];
-        _inferenceTime = endTime - startTime;
-      } else {
-        _result = "Error in classification";
-        _confidence = 0.0;
-      }
+      _result = predictedLabelIndex == 1 ? "Spam" : "Ham";
+      _confidence = confidence;
+      _inferenceTime = endTime - startTime;
     });
   }
 
@@ -87,14 +126,12 @@ class _SpamDetectionAppState extends State<SpamDetectionApp> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _isLoading
-                    ? CircularProgressIndicator()
-                    : SizedBox.shrink(),
+                _isLoading ? CircularProgressIndicator() : SizedBox.shrink(),
                 SizedBox(width: 10),
                 ElevatedButton(
-                  onPressed: _isLoading
-                      ? null
-                      : () => classifyText(_controller.text),
+                  onPressed: (!_isLoading && _modelLoaded)
+                      ? () => classifyText(_controller.text)
+                      : null,
                   child: Text("Predict"),
                 ),
               ],
@@ -123,7 +160,7 @@ class _SpamDetectionAppState extends State<SpamDetectionApp> {
 
   @override
   void dispose() {
-    Tflite.close();
+    _interpreter?.close();
     super.dispose();
   }
 }
