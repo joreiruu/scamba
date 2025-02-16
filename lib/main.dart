@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
-import 'dart:typed_data';
-import 'dart:convert';
 
 void main() {
   runApp(MyApp());
@@ -25,57 +24,49 @@ class SpamDetectionApp extends StatefulWidget {
 class _SpamDetectionAppState extends State<SpamDetectionApp> {
   TextEditingController _controller = TextEditingController();
   bool _isLoading = false;
-  bool _modelLoaded = false;
   String _result = "";
   double _confidence = 0.0;
   int _inferenceTime = 0;
-  Interpreter? _interpreter;
-
-  Map<String, int> vocab = {
-    "[PAD]": 0,
-    "[UNK]": 1,
-    "[CLS]": 2,
-    "[SEP]": 3,
-    "spam": 4,
-    "ham": 5,
-  };
+  late Interpreter _interpreter;
+  bool _modelLoaded = false;
+  Map<String, int> _vocab = {};
+  final int _sentenceLen = 128;
 
   @override
   void initState() {
     super.initState();
-    loadModel();
+    _loadModel();
   }
 
-  Future<void> loadModel() async {
+  Future<void> _loadModel() async {
     try {
-      _interpreter = await Interpreter.fromAsset("assets/lite_scam_ham_bert_model_tv0.tflite");
-      print("Model Loaded Successfully!");
+      _interpreter = await Interpreter.fromAsset("assets/lite_scamba_bert_model_tv0_fix2.tflite");
+      await _loadDictionary();
       setState(() {
         _modelLoaded = true;
       });
+      print("Model Loaded Successfully!");
     } catch (e) {
       print("Error loading model: $e");
     }
   }
 
-  List<int> tokenizeText(String text) {
-    List<String> words = text.toLowerCase().split(" ");
-    List<int> tokenized = [vocab["[CLS]"] ?? 2]; // BERT CLS token
-
-    for (var word in words) {
-      tokenized.add(vocab[word] ?? vocab["[UNK]"]!); // Convert to token ID, default to UNK
-    }
-
-    tokenized.add(vocab["[SEP]"] ?? 3); // BERT SEP token
-    while (tokenized.length < 128) {
-      tokenized.add(vocab["[PAD]"] ?? 0); // Pad to 128 tokens
-    }
+  Future<void> _loadDictionary() async {
+  try {
+    final vocabData = await rootBundle.loadString("assets/vocab.txt");
+    final lines = vocabData.split('\n').where((line) => line.isNotEmpty).toList();
     
-    return tokenized.sublist(0, 128); // Ensure input is 128 tokens
+    _vocab = {for (var i = 0; i < lines.length; i++) lines[i].trim(): i};
+    
+    print("Vocabulary Loaded Successfully! Size: ${_vocab.length}");
+  } catch (e) {
+    print("Error loading vocabulary: $e");
   }
+}
+
 
   Future<void> classifyText(String text) async {
-    if (!_modelLoaded || _interpreter == null) {
+    if (!_modelLoaded) {
       print("Error: Model not loaded yet!");
       return;
     }
@@ -85,26 +76,34 @@ class _SpamDetectionAppState extends State<SpamDetectionApp> {
     });
 
     final startTime = DateTime.now().millisecondsSinceEpoch;
+    List<List<double>> input = _tokenize(text);
+    var output = List.filled(2, 0.0).reshape([1, 2]);
 
-    List<int> tokenizedInput = tokenizeText(text);
-    Uint8List inputTensor = Uint8List.fromList(tokenizedInput);
-
-    var output = List.filled(2, 0).reshape([1, 2]);
-
-    _interpreter!.run([inputTensor], output);
-
+    _interpreter.run(input, output);
     final endTime = DateTime.now().millisecondsSinceEpoch;
 
-    int predictedLabelIndex = output[0][0]; // Assuming classification index
-    double confidence = output[0][1] / 255.0; // Normalize
-
+    bool isSpam = output[0][1] > output[0][0]; // Spam detection logic
     setState(() {
       _isLoading = false;
-      _result = predictedLabelIndex == 1 ? "Spam" : "Ham";
-      _confidence = confidence;
+      _result = isSpam ? "Spam" : "Ham";
+      _confidence = isSpam ? output[0][1] : output[0][0];
       _inferenceTime = endTime - startTime;
     });
   }
+
+  List<List<double>> _tokenize(String text) {
+  List<String> words = text.split(' ');
+  List<double> tokenized = List.filled(_sentenceLen, (_vocab["[PAD]"] ?? 0).toDouble());
+
+  int index = 0;
+  tokenized[index++] = (_vocab["[CLS]"] ?? 2).toDouble(); // BERT CLS token
+
+  for (var word in words.take(_sentenceLen - 1)) {
+    tokenized[index++] = (_vocab[word] ?? _vocab["[UNK]"] ?? 1).toDouble();
+  }
+
+  return [tokenized];
+}
 
   @override
   Widget build(BuildContext context) {
@@ -160,7 +159,7 @@ class _SpamDetectionAppState extends State<SpamDetectionApp> {
 
   @override
   void dispose() {
-    _interpreter?.close();
+    _interpreter.close();
     super.dispose();
   }
 }

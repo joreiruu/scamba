@@ -54,8 +54,9 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
   assets:
-    - assets/lite_scam_ham_bert_model_tv0.tflite
+    - assets/lite_scamba_bert_model_tv0_fix2.tflite
     - assets/labels.txt
+    - assets/vocab.txt
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
