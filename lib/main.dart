@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:tflite_flutter/tflite_flutter.dart';
+import 'classifier.dart';
 
 void main() {
   runApp(MyApp());
@@ -22,52 +21,26 @@ class SpamDetectionApp extends StatefulWidget {
 }
 
 class _SpamDetectionAppState extends State<SpamDetectionApp> {
-  TextEditingController _controller = TextEditingController();
+  final TextEditingController _controller = TextEditingController();
+  final Classifier _classifier = Classifier();
   bool _isLoading = false;
   String _result = "";
   double _confidence = 0.0;
   int _inferenceTime = 0;
-  late Interpreter _interpreter;
-  bool _modelLoaded = false;
-  Map<String, int> _vocab = {};
-  final int _sentenceLen = 128;
 
   @override
   void initState() {
     super.initState();
-    _loadModel();
+    print("🟡 Loading model...");
+    _classifier.loadModel().then((_) {
+      setState(() {});
+      print("✅ Model loaded successfully!");
+    });
   }
-
-  Future<void> _loadModel() async {
-    try {
-      _interpreter = await Interpreter.fromAsset("assets/lite_scamba_bert_model_tv0_fix2.tflite");
-      await _loadDictionary();
-      setState(() {
-        _modelLoaded = true;
-      });
-      print("Model Loaded Successfully!");
-    } catch (e) {
-      print("Error loading model: $e");
-    }
-  }
-
-  Future<void> _loadDictionary() async {
-  try {
-    final vocabData = await rootBundle.loadString("assets/vocab.txt");
-    final lines = vocabData.split('\n').where((line) => line.isNotEmpty).toList();
-    
-    _vocab = {for (var i = 0; i < lines.length; i++) lines[i].trim(): i};
-    
-    print("Vocabulary Loaded Successfully! Size: ${_vocab.length}");
-  } catch (e) {
-    print("Error loading vocabulary: $e");
-  }
-}
-
 
   Future<void> classifyText(String text) async {
-    if (!_modelLoaded) {
-      print("Error: Model not loaded yet!");
+    if (!_classifier.isModelLoaded) {
+      print("❌ Error: Model not loaded yet!");
       return;
     }
 
@@ -75,35 +48,24 @@ class _SpamDetectionAppState extends State<SpamDetectionApp> {
       _isLoading = true;
     });
 
-    final startTime = DateTime.now().millisecondsSinceEpoch;
-    List<List<double>> input = _tokenize(text);
-    var output = List.filled(2, 0.0).reshape([1, 2]);
+    print("🟡 Classifying text: \"$text\"");
 
-    _interpreter.run(input, output);
+    final startTime = DateTime.now().millisecondsSinceEpoch;
+    final prediction = await _classifier.classify(text);
     final endTime = DateTime.now().millisecondsSinceEpoch;
 
-    bool isSpam = output[0][1] > output[0][0]; // Spam detection logic
+    print("✅ Classification completed!");
+    print("📌 Prediction: ${prediction.isSpam ? "Spam" : "Ham"}");
+    print("📊 Confidence: ${(prediction.confidence * 100).toStringAsFixed(2)}%");
+    print("⏳ Inference Time: ${endTime - startTime}ms");
+
     setState(() {
       _isLoading = false;
-      _result = isSpam ? "Spam" : "Ham";
-      _confidence = isSpam ? output[0][1] : output[0][0];
+      _result = prediction.isSpam ? "Spam" : "Ham";
+      _confidence = prediction.confidence;
       _inferenceTime = endTime - startTime;
     });
   }
-
-  List<List<double>> _tokenize(String text) {
-  List<String> words = text.split(' ');
-  List<double> tokenized = List.filled(_sentenceLen, (_vocab["[PAD]"] ?? 0).toDouble());
-
-  int index = 0;
-  tokenized[index++] = (_vocab["[CLS]"] ?? 2).toDouble(); // BERT CLS token
-
-  for (var word in words.take(_sentenceLen - 1)) {
-    tokenized[index++] = (_vocab[word] ?? _vocab["[UNK]"] ?? 1).toDouble();
-  }
-
-  return [tokenized];
-}
 
   @override
   Widget build(BuildContext context) {
@@ -128,7 +90,7 @@ class _SpamDetectionAppState extends State<SpamDetectionApp> {
                 _isLoading ? CircularProgressIndicator() : SizedBox.shrink(),
                 SizedBox(width: 10),
                 ElevatedButton(
-                  onPressed: (!_isLoading && _modelLoaded)
+                  onPressed: (!_isLoading && _classifier.isModelLoaded)
                       ? () => classifyText(_controller.text)
                       : null,
                   child: Text("Predict"),
@@ -159,7 +121,7 @@ class _SpamDetectionAppState extends State<SpamDetectionApp> {
 
   @override
   void dispose() {
-    _interpreter.close();
+    _classifier.close();
     super.dispose();
   }
 }
