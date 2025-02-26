@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../widgets/hamburger_menu.dart';
-import '../widgets/message_item.dart';
 import '../models/message_model.dart';
 import '../models/conversation_model.dart' as model;
 import 'message_detail_screen.dart';
@@ -57,7 +56,7 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
       appBar: AppBar(
         title: const Text(
           'SCAMBA',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2),
+          style: TextStyle(fontWeight: FontWeight.w600, letterSpacing: 1.2),
         ),
         centerTitle: true,
         backgroundColor: isDarkMode ? Colors.black : Colors.white,
@@ -93,9 +92,7 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildMessageList(
-            conversations.expand((c) => c.messages).toList(),
-          ),
+          _buildConversationList(conversations),
           _buildMessageList(
             conversations.expand((c) => c.messages).where((m) => m.isSpam).toList(),
           ),
@@ -104,74 +101,105 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
     );
   }
 
-  Widget _buildMessageList(List<Message> messageList) {
+  Widget _buildConversationList(List<model.Conversation> conversationList) {
     return ListView.builder(
-      itemCount: messageList.length,
+      itemCount: conversationList.length,
       itemBuilder: (context, index) {
-        final message = messageList[index];
-        bool isSelected = selectedMessages.contains(message.id);
-        final conversation = conversations.firstWhere(
-          (c) => c.messages.contains(message),
-          orElse: () => model.Conversation(id: -1, sender: "", messages: []),
-        );
+        final conversation = conversationList[index];
+        final lastMessage = conversation.messages.isNotEmpty
+            ? conversation.messages.last
+            : null;
 
         return Dismissible(
-          key: Key(message.id.toString()),
-          background: _swipeBackground(Colors.blue, Icons.archive, Alignment.centerLeft),
+          key: ValueKey(conversation.id),
+          background: _swipeBackground(Colors.green, Icons.archive, Alignment.centerLeft),
           secondaryBackground: _swipeBackground(Colors.red, Icons.delete, Alignment.centerRight),
           onDismissed: (direction) {
             setState(() {
-              if (direction == DismissDirection.endToStart) {
-                conversation.messages.removeWhere((m) => m.id == message.id);
-              }
+              conversations.removeAt(index);
             });
           },
-          child: GestureDetector(
-            onLongPress: () => _toggleSelection(message.id),
-            child: MessageItem(
-              message: message,
-              conversation: conversation,
-              isSelected: isSelected,
-              onTap: () {
-  if (selectionMode) {
-    _toggleSelection(message.id);
-  } else {
-    Navigator.push(
-     context,
-     MaterialPageRoute(
-      builder: (context) => MessageDetailScreen(
-        message: message,
-        onMessageRead: (msg) => _markMessageAsRead(msg, conversation),  // Add this line
-        ),
-      ),
-    );
-  }
-},
-              onMessageRead: (Message msg) {
-                _markMessageAsRead(msg, conversation);
-              },
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: Colors.blue,
+              child: Text(conversation.sender[0].toUpperCase()),
             ),
+            title: Text(
+              conversation.sender,
+              style: TextStyle(fontWeight: conversation.unreadCount > 0 ? FontWeight.bold : FontWeight.normal),
+            ),
+            subtitle: lastMessage != null
+                ? Text(
+                    lastMessage.content,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  )
+                : Text("No messages"),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (lastMessage != null)
+                  Text(
+                    "${lastMessage.timestamp.hour}:${lastMessage.timestamp.minute}",
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                if (conversation.unreadCount > 0)
+                  CircleAvatar(
+                    backgroundColor: Colors.red,
+                    radius: 10,
+                    child: Text(
+                      conversation.unreadCount.toString(),
+                      style: TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ),
+              ],
+            ),
+            onTap: () {
+              _markMessageAsRead(conversation.messages.last, conversation.messages);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MessageDetailScreen(conversation: conversation),
+                ),
+              );
+            },
+            onLongPress: () => _toggleSelection(conversation.id),
           ),
         );
       },
     );
   }
 
-  void _markMessageAsRead(Message message, model.Conversation conversation) {
-    setState(() {
-      Message updatedMessage = message.copyWith(isRead: true);
-      conversations = conversations.map((c) {
-        if (c.id == conversation.id) {
-          return model.Conversation(
-            id: c.id,
-            sender: c.sender,
-            messages: c.messages.map((m) => m.id == message.id ? updatedMessage : m).toList(),
-          );
-        }
-        return c;
-      }).toList();
-    });
-  }
+  void _markMessageAsRead(Message message, List<Message> messages) {
+  setState(() {
+    for (var i = 0; i < conversations.length; i++) {
+      if (conversations[i].sender == message.sender) {
+        // ✅ Replace each message with an updated copy where isRead = true
+        conversations[i] = conversations[i].copyWith(
+          messages: conversations[i].messages.map((m) {
+            return m.copyWith(isRead: true);
+          }).toList(),
+        );
+        break;
+      }
+    }
+  });
+}
+
+Widget _buildMessageList(List<Message> messages) {
+  return ListView.builder(
+    itemCount: messages.length,
+    itemBuilder: (context, index) {
+      final message = messages[index];
+      return ListTile(
+        title: Text(message.content),
+        subtitle: Text(message.timestamp.toString()),
+        leading: Icon(message.isSpam ? Icons.warning : Icons.message),
+      );
+    },
+  );
+}
+
 
   Widget _swipeBackground(Color color, IconData icon, Alignment alignment) {
     return Container(
@@ -202,9 +230,7 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
 
   void _deleteSelected() {
     setState(() {
-      for (var conversation in conversations) {
-        conversation.messages.removeWhere((m) => selectedMessages.contains(m.id));
-      }
+      conversations.removeWhere((conversation) => selectedMessages.contains(conversation.id));
       selectedMessages.clear();
       selectionMode = false;
     });
