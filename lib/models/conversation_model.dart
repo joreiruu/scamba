@@ -13,6 +13,9 @@ class Conversation {
 
   int get unreadCount => messages.where((msg) => !msg.isRead).length;
 
+  // ✅ Get the timestamp of the last message
+  DateTime? get lastMessageTimestamp => messages.isNotEmpty ? messages.last.timestamp : null;
+
   // ✅ Added copyWith to allow safe updates
   Conversation copyWith({List<Message>? messages}) {
     return Conversation(
