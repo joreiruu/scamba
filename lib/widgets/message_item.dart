@@ -20,18 +20,19 @@ class MessageItem extends StatelessWidget {
   });
 
   String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date).inDays;
-    if (difference == 0) {
-      return "Today";
-    } else if (difference < 7) {
-      return DateFormat('EEE').format(date);
-    } else if (date.year == now.year) {
-      return DateFormat('d MMM').format(date);
-    } else {
-      return DateFormat('dd/MM/yyyy').format(date);
-    }
+  final now = DateTime.now();
+  final difference = now.difference(date).inDays;
+
+  if (difference == 0) {
+    return DateFormat('h:mm a').format(date);  // Shows time if today
+  } else if (difference < 7) {
+    return DateFormat('EEE').format(date);  // Shows day (Mon, Tue)
+  } else if (date.year == now.year) {
+    return DateFormat('d MMM').format(date);  // Shows '26 Feb'
+  } else {
+    return DateFormat('dd/MM/yyyy').format(date);  // Shows full date
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -59,31 +60,44 @@ class MessageItem extends StatelessWidget {
           fontWeight: hasUnreadMessages ? FontWeight.bold : FontWeight.normal,
         ),
       ),
+
+      ////////
+      
       trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            _formatDate(message.timestamp),
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: hasUnreadMessages ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-          if (hasUnreadMessages)
-            Container(
-              margin: const EdgeInsets.only(top: 5),
-              padding: const EdgeInsets.all(6),
-              decoration: const BoxDecoration(
-                color: Colors.blue,
-                shape: BoxShape.circle,
-              ),
-              child: Text(
-                conversation.unreadCount.toString(),
-                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-            ),
-        ],
+  mainAxisAlignment: MainAxisAlignment.center,
+  crossAxisAlignment: CrossAxisAlignment.end, // ✅ Ensures right alignment
+  children: [
+    Text(
+      _formatDate(message.timestamp),
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: message.isRead ? FontWeight.normal : FontWeight.bold,
       ),
+    ),
+    if (!message.isRead)
+      Container(
+        margin: const EdgeInsets.only(top: 5), // ✅ Adds spacing
+        width: 18,
+        height: 18,
+        decoration: const BoxDecoration(
+          color: Colors.blue,
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          conversation.unreadCount.toString(),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+  ],
+),
+
+   
+      ////////
       tileColor: isSelected ? Colors.blue.withAlpha(75) : null,
       onTap: () {
         if (!message.isRead) {
