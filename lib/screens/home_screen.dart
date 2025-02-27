@@ -3,6 +3,7 @@ import '../widgets/hamburger_menu.dart';
 import '../models/message_model.dart';
 import '../models/conversation_model.dart' as model;
 import 'message_detail_screen.dart';
+import 'package:intl/intl.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,18 +20,18 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
   List<model.Conversation> conversations = [
     model.Conversation(
       id: 1,
-      sender: "Alice",
+      sender: "Min",
       messages: [
-        Message(id: 1, sender: "Alice", content: "Hello! How are you?", isRead: false, timestamp: DateTime.now().subtract(Duration(minutes: 5))),
-        Message(id: 2, sender: "Alice", content: "Are you free later?", isRead: true, timestamp: DateTime.now().subtract(Duration(hours: 1))),
+        Message(id: 1, sender: "Min", content: "Andy where are you ngayon? i miss you", isRead: false, timestamp: DateTime.now().subtract(Duration(minutes: 5))),
+        Message(id: 2, sender: "Min", content: "kakain po ba tayo sa labas later?", isRead: true, timestamp: DateTime.now().subtract(Duration(hours: 1))),
       ],
     ),
     model.Conversation(
       id: 2,
-      sender: "Bob",
+      sender: "Ma",
       messages: [
-        Message(id: 3, sender: "Bob", content: "Did you see the news?", isRead: true, timestamp: DateTime.now().subtract(Duration(hours: 2))),
-        Message(id: 4, sender: "Bob", content: "Let's meet up later!", isRead: false, timestamp: DateTime.now().subtract(Duration(days: 1))),
+        Message(id: 3, sender: "Ma", content: "load mo daw ako noy", isRead: true, timestamp: DateTime.now().subtract(Duration(hours: 2))),
+        Message(id: 4, sender: "Ma", content: "reg 50", isRead: false, timestamp: DateTime.now().subtract(Duration(days: 1))),
       ],
     ),
   ];
@@ -54,10 +55,17 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'SCAMBA',
-          style: TextStyle(fontWeight: FontWeight.w600, letterSpacing: 1.2),
-        ),
+        title: Text(
+  'SCAMBA',
+  style: TextStyle(
+    color: isDarkMode ? Colors.white : Colors.black, // Adapt to theme
+    fontSize: 24,
+    fontWeight: FontWeight.bold,
+    letterSpacing: 1.5,
+    fontFamily: 'Montserrat', // Custom font
+  ),
+),
+
         centerTitle: true,
         backgroundColor: isDarkMode ? Colors.black : Colors.white,
         iconTheme: IconThemeData(color: isDarkMode ? Colors.white : Colors.black),
@@ -101,6 +109,8 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
     );
   }
 
+  ///////
+
   Widget _buildConversationList(List<model.Conversation> conversationList) {
     return ListView.builder(
       itemCount: conversationList.length,
@@ -135,25 +145,44 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
                     overflow: TextOverflow.ellipsis,
                   )
                 : Text("No messages"),
-            trailing: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (lastMessage != null)
-                  Text(
-                    "${lastMessage.timestamp.hour}:${lastMessage.timestamp.minute}",
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                if (conversation.unreadCount > 0)
-                  CircleAvatar(
-                    backgroundColor: Colors.red,
-                    radius: 10,
-                    child: Text(
-                      conversation.unreadCount.toString(),
-                      style: TextStyle(color: Colors.white, fontSize: 12),
-                    ),
-                  ),
-              ],
-            ),
+
+                //////////  
+             trailing: Column(
+  mainAxisAlignment: MainAxisAlignment.center,
+  crossAxisAlignment: CrossAxisAlignment.end, // ✅ Ensures right alignment
+  children: [
+    if (lastMessage != null)
+      Text(
+        _formatDate(lastMessage.timestamp),
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: conversation.unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+    if (conversation.unreadCount > 0)
+      Container(
+        margin: const EdgeInsets.only(top: 5), // ✅ Adds spacing
+        width: 18,
+        height: 18,
+        decoration: const BoxDecoration(
+          color: Colors.red,
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          conversation.unreadCount.toString(),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+  ],
+),
+   
+ 
+            /////////////
             onTap: () {
               _markMessageAsRead(conversation.messages.last, conversation.messages);
               Navigator.push(
@@ -169,6 +198,23 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
       },
     );
   }
+
+  /////////
+
+  String _formatDate(DateTime date) {
+  final now = DateTime.now();
+  final difference = now.difference(date).inDays;
+
+  if (difference == 0) {
+    return DateFormat('h:mm a').format(date);  // ✅ Shows time if today
+  } else if (difference < 7) {
+    return DateFormat('EEE').format(date);  // ✅ Shows day (Mon, Tue)
+  } else if (date.year == now.year) {
+    return DateFormat('d MMM').format(date);  // ✅ Shows '26 Feb'
+  } else {
+    return DateFormat('dd/MM/yyyy').format(date);  // ✅ Shows full date
+  }
+}
 
   void _markMessageAsRead(Message message, List<Message> messages) {
   setState(() {
