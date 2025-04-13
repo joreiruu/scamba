@@ -1,118 +1,106 @@
 import 'package:flutter/material.dart';
-import 'classifier.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
-void main() {
-  runApp(MyApp());
-}
+void main() => runApp(const MyApp());
 
 class MyApp extends StatelessWidget {
+  const MyApp({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: SpamDetectionApp(),
+      home: const HomePage(),
+      theme: ThemeData(useMaterial3: true),
     );
   }
 }
 
-class SpamDetectionApp extends StatefulWidget {
+class HomePage extends StatefulWidget {
+  const HomePage({Key? key}) : super(key: key);
+
   @override
-  _SpamDetectionAppState createState() => _SpamDetectionAppState();
+  State<HomePage> createState() => _HomePageState();
 }
 
-class _SpamDetectionAppState extends State<SpamDetectionApp> {
-  final TextEditingController _controller = TextEditingController();
-  final Classifier _classifier = Classifier();
+class _HomePageState extends State<HomePage> {
+  final _textController = TextEditingController();
+  Map<String, dynamic>? _result;
   bool _isLoading = false;
-  String _result = "";
-  double _confidence = 0.0;
-  int _inferenceTime = 0;
+  String apiUrl = 'https://35e8-136-158-102-114.ngrok-free.app/classify'; // Make this configurable
 
-  @override
-  void initState() {
-    super.initState();
-    print("🟡 Loading model...");
-    _classifier.loadModel().then((_) {
-      setState(() {});
-      print("✅ Model loaded successfully!");
-    });
-  }
-
-  Future<void> classifyText(String text) async {
-    if (!_classifier.isModelLoaded) {
-      print("❌ Error: Model not loaded yet!");
+  Future<void> _checkMessage() async {
+    if (_textController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a message')),
+      );
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
+    
+    try {
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'text': _textController.text}),
+      ).timeout(const Duration(seconds: 10)); // Add timeout
 
-    print("🟡 Classifying text: \"$text\"");
-
-    final startTime = DateTime.now().millisecondsSinceEpoch;
-    final prediction = await _classifier.classify(text);
-    final endTime = DateTime.now().millisecondsSinceEpoch;
-
-    print("✅ Classification completed!");
-    print("📌 Prediction: ${prediction.isSpam ? "Spam" : "Ham"}");
-    print("📊 Confidence: ${(prediction.confidence * 100).toStringAsFixed(2)}%");
-    print("⏳ Inference Time: ${endTime - startTime}ms");
-
-    setState(() {
-      _isLoading = false;
-      _result = prediction.isSpam ? "Spam" : "Ham";
-      _confidence = prediction.confidence;
-      _inferenceTime = endTime - startTime;
-    });
+      if (response.statusCode == 200) {
+        setState(() => _result = jsonDecode(response.body));
+      } else {
+        throw 'Server error: ${response.statusCode}';
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Connection error: ${e.toString()}')),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Scamba")),
+      appBar: AppBar(title: const Text('Scam Detector')),
       body: Padding(
-        padding: EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             TextField(
-              controller: _controller,
-              decoration: InputDecoration(
+              controller: _textController,
+              decoration: const InputDecoration(
+                labelText: 'Enter message',
                 border: OutlineInputBorder(),
-                labelText: "Enter SMS Text",
               ),
+              maxLines: 3,
             ),
-            SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _isLoading ? CircularProgressIndicator() : SizedBox.shrink(),
-                SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: (!_isLoading && _classifier.isModelLoaded)
-                      ? () => classifyText(_controller.text)
-                      : null,
-                  child: Text("Predict"),
-                ),
-              ],
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _isLoading ? null : _checkMessage,
+              child: _isLoading 
+                ? const CircularProgressIndicator()
+                : const Text('Check'),
             ),
-            SizedBox(height: 20),
-            if (_result.isNotEmpty)
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.blue),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Column(
-                  children: [
-                    Text("Prediction: $_result", style: TextStyle(fontSize: 18)),
-                    Text("Confidence: ${(_confidence * 100).toStringAsFixed(2)}%"),
-                    Text("Inference Time: ${_inferenceTime}ms"),
-                  ],
+            if (_result != null) ...[
+              const SizedBox(height: 20),
+              Text(
+                _result!['predicted_class'] == 1 ? 'SCAM' : 'HAM',
+                style: TextStyle(
+                  fontSize: 24,
+                  color: _result!['predicted_class'] == 1 
+                    ? Colors.red 
+                    : Colors.green,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
+              const SizedBox(height: 8),
+              Text(
+                'Confidence: ${_result!['confidence'].toStringAsFixed(1)}%',
+                style: const TextStyle(fontSize: 16),
+              ),
+            ],
           ],
         ),
       ),
@@ -121,7 +109,7 @@ class _SpamDetectionAppState extends State<SpamDetectionApp> {
 
   @override
   void dispose() {
-    _classifier.close();
+    _textController.dispose();
     super.dispose();
   }
 }
