@@ -2,43 +2,42 @@ class Message {
   final int id;
   final String sender;
   final String content;
-  final bool isSpam;
-  final double spamLikelihood;
   final bool isRead;
+  final bool isSpam;
+  final bool isFavorite;  // Add this property
+  final double spamConfidence;
   final DateTime timestamp;
-  final bool isSelected;
-  final bool isFavorite; // Added favorite property
 
   Message({
     required this.id,
     required this.sender,
     required this.content,
-    this.isSpam = false,
-    this.spamLikelihood = 0.0,
     this.isRead = false,
+    this.isSpam = false,
+    this.isFavorite = false,  // Add default value
+    this.spamConfidence = 0.0,
     required this.timestamp,
-    this.isSelected = false,
-    this.isFavorite = false, // Default to not favorited
   });
 
-  /// Use copyWith to update fields safely
   Message copyWith({
-    bool? isSpam, 
-    double? spamLikelihood, 
-    bool? isRead, 
-    bool? isSelected,
-    bool? isFavorite, // Added isFavorite parameter
+    int? id,
+    String? sender,
+    String? content,
+    bool? isRead,
+    bool? isSpam,
+    bool? isFavorite,  // Add to copyWith
+    double? spamConfidence,
+    DateTime? timestamp,
   }) {
     return Message(
-      id: id,
-      sender: sender,
-      content: content,
-      isSpam: isSpam ?? this.isSpam,
-      spamLikelihood: spamLikelihood ?? this.spamLikelihood,
+      id: id ?? this.id,
+      sender: sender ?? this.sender,
+      content: content ?? this.content,
       isRead: isRead ?? this.isRead,
-      timestamp: timestamp,
-      isSelected: isSelected ?? this.isSelected,
-      isFavorite: isFavorite ?? this.isFavorite, // Pass through isFavorite
+      isSpam: isSpam ?? this.isSpam,
+      isFavorite: isFavorite ?? this.isFavorite,  // Include in new instance
+      spamConfidence: spamConfidence ?? this.spamConfidence,
+      timestamp: timestamp ?? this.timestamp,
     );
   }
 }
