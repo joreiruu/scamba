@@ -18,11 +18,10 @@ class SmsService {
     }
 
     try {
-      final messages = await _query.querySms(
-        kinds: [SmsQueryKind.inbox],
-        count: 100,
-      );
+      // Get all messages without limit
+      final messages = await _query.getAllSms;
 
+      // Group messages by sender
       final Map<String, List<SmsMessage>> groupedMessages = {};
       for (var sms in messages) {
         final sender = sms.sender ?? 'Unknown';
