@@ -320,7 +320,7 @@ void _toggleFavoriteAndExitSelection(Message message) {
                         }
                       ),
                       
-                      if (message.isClassified)
+                      if (message.isClassified && message.isSpam)  // Only show for spam
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8.0),
                           child: Row(
@@ -346,12 +346,10 @@ void _toggleFavoriteAndExitSelection(Message message) {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                message.isSpam
-                                    ? '${message.spamConfidence.toStringAsFixed(0)}% Spam'
-                                    : 'HAM',
+                                '${message.spamConfidence.toStringAsFixed(0)}% Spam',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: message.isSpam ? Colors.red[700] : Colors.green[700],
+                                  color: Colors.red[700],
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),

@@ -40,4 +40,6 @@ class Message {
       isClassified: isClassified ?? this.isClassified,
     );
   }
+
+  bool get needsIndicator => isClassified && isSpam;
 }

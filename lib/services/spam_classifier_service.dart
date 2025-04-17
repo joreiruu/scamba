@@ -9,76 +9,83 @@ class SpamClassifierService {
   final CacheService _cacheService = CacheService();
 
   Future<List<Map<String, dynamic>>> classifyBatch(List<String> messages) async {
-    print('📥 Starting batch classification for ${messages.length} messages');
+    print('\n📊 BATCH CLASSIFICATION');
+    print('═' * 80);
+    print('Messages to process: ${messages.length}');
+
     if (messages.isEmpty) return [];
 
-    // Create a map to track original indices and timestamps
     List<String> uncachedMessages = [];
     List<Map<String, dynamic>> results = List.filled(messages.length, {});
-    Map<int, int> messageIndexMap = {}; // Maps batch index to original index
-    
-    print('🔍 Checking cache and organizing messages...');
+    Map<int, int> messageIndexMap = {};
+
+    // Check cache
     for (int i = 0; i < messages.length; i++) {
-      final cachedResult = await _cacheService.getCachedClassification(messages[i]);
+      final message = messages[i];
+      final cachedResult = await _cacheService.getCachedClassification(message);
       if (cachedResult != null) {
-        print('✅ Cache hit for message $i: $cachedResult');
         results[i] = cachedResult;
       } else {
-        print('❌ Cache miss for message $i');
         messageIndexMap[uncachedMessages.length] = i;
-        uncachedMessages.add(messages[i]);
+        uncachedMessages.add(message);
       }
     }
 
-    if (uncachedMessages.isEmpty) {
-      print('💫 All messages found in cache');
-      return results;
-    }
+    if (uncachedMessages.isEmpty) return results;
 
-    print('🌐 Sending ${uncachedMessages.length} messages to API...');
     try {
+      print('\n🌐 Sending API request:');
+      print(const JsonEncoder.withIndent('  ').convert({'texts': uncachedMessages}));
+
       final response = await http.post(
         Uri.parse(apiUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'texts': uncachedMessages}),
       ).timeout(const Duration(seconds: 30));
 
-      print('📊 API Response Status: ${response.statusCode}');
+      print('\n📥 API Response (${response.statusCode}):');
+      print(const JsonEncoder.withIndent('  ').convert(jsonDecode(response.body)));
       
       if (response.statusCode == 200) {
         final List<dynamic> batchResults = jsonDecode(response.body);
-        print('✨ Received classifications for ${batchResults.length} messages');
         
-        // Process results maintaining original order
         for (int i = 0; i < batchResults.length; i++) {
           final originalIndex = messageIndexMap[i]!;
           final result = batchResults[i];
-          final confidence = result['confidence'] as double;
+          final message = messages[originalIndex];
           
+          print('\n═════════════════════════════════');
+          print('MESSAGE: "${message.substring(0, min(50, message.length))}..."');
+          print('RAW API RESPONSE:');
+          print(const JsonEncoder.withIndent('  ').convert(result));
+          print('═════════════════════════════════');
+
           final classification = {
-            'predicted_class': confidence >= SPAM_THRESHOLD ? 1 : 0,
-            'confidence': confidence,
-            'timestamp': DateTime.now().millisecondsSinceEpoch, // Add timestamp
+            'predicted_class': result['predicted_class'],
+            'confidence': result['confidence'],
+            'raw_scores': [
+              result['class_0_probability'] ?? 0.0,
+              result['class_1_probability'] ?? 0.0
+            ],
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
           };
 
-          print('📝 Message ${originalIndex + 1}/${messages.length}: ${classification['predicted_class'] == 1 ? "SPAM" : "HAM"} (${confidence.toStringAsFixed(2)}%)');
-          
-          await _cacheService.cacheClassification(messages[originalIndex], classification);
+          await _cacheService.cacheClassification(message, classification);
           results[originalIndex] = classification;
         }
-
-        print('✅ Batch classification completed successfully');
+        
         return results;
       } else {
         print('❌ API Error: ${response.statusCode}');
+        print('Response: ${response.body}');
         throw Exception('Server error: ${response.statusCode}');
       }
     } catch (e) {
-      print('⚠️ Error during batch classification: $e');
+      print('⚠️ Error: $e');
       return List.generate(messages.length, (index) => {
         'predicted_class': 0,
         'confidence': 0.0,
-        'error': 'Connection error: ${e.toString()}',
+        'error': e.toString(),
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       });
     }
