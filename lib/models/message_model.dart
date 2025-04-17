@@ -2,42 +2,42 @@ class Message {
   final int id;
   final String sender;
   final String content;
-  final bool isRead;
-  final bool isSpam;
-  final bool isFavorite;  // Add this property
-  final double spamConfidence;
   final DateTime timestamp;
+  bool isRead;
+  bool isSpam;
+  bool isFavorite;
+  double spamConfidence;
+  bool isClassified;  // Add this field
 
   Message({
     required this.id,
     required this.sender,
     required this.content,
+    required this.timestamp,
     this.isRead = false,
     this.isSpam = false,
-    this.isFavorite = false,  // Add default value
-    this.spamConfidence = 0.0,
-    required this.timestamp,
+    this.isFavorite = false,
+    this.spamConfidence = -1,
+    this.isClassified = false,  // Initialize as unclassified
   });
 
   Message copyWith({
-    int? id,
-    String? sender,
-    String? content,
-    bool? isRead,
     bool? isSpam,
-    bool? isFavorite,  // Add to copyWith
     double? spamConfidence,
-    DateTime? timestamp,
+    bool? isRead,
+    bool? isFavorite,
+    bool? isClassified,
   }) {
     return Message(
-      id: id ?? this.id,
-      sender: sender ?? this.sender,
-      content: content ?? this.content,
+      id: id,
+      sender: sender,
+      content: content,
+      timestamp: timestamp,
       isRead: isRead ?? this.isRead,
       isSpam: isSpam ?? this.isSpam,
-      isFavorite: isFavorite ?? this.isFavorite,  // Include in new instance
+      isFavorite: isFavorite ?? this.isFavorite,
       spamConfidence: spamConfidence ?? this.spamConfidence,
-      timestamp: timestamp ?? this.timestamp,
+      isClassified: isClassified ?? this.isClassified,
     );
   }
 }

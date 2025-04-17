@@ -3,32 +3,30 @@ import 'package:scamba/models/message_model.dart';
 class Conversation {
   final int id;
   final String sender;
-  final List<Message> messages;
-  final bool isFavorite;
+  List<Message> messages;
 
   Conversation({
     required this.id,
     required this.sender,
-    required this.messages,
-    this.isFavorite = false,
-  });
+    required List<Message> messages,
+  }) : messages = messages..sort((a, b) => a.timestamp.compareTo(b.timestamp)); // Keep oldest to newest for processing
 
-  /// ✅ Get the count of unread messages
-  int get unreadCount => messages.where((msg) => !msg.isRead).length;
+  Message get latestMessage => messages.last;
+  DateTime get lastMessageTime => messages.last.timestamp;
+  int get unreadCount => messages.where((m) => !m.isRead).length;
 
-  /// ✅ Get the timestamp of the last message
-  DateTime? get lastMessageTimestamp => messages.isNotEmpty ? messages.last.timestamp : null;
+  // This getter maintains UI design - messages display from bottom to top
+  List<Message> get orderedMessages => messages.reversed.toList();
 
-  /// ✅ Check if the conversation contains spam messages
-  bool get hasSpam => messages.any((msg) => msg.isSpam);
-
-  /// ✅ Create a copy of the conversation with updated messages
-  Conversation copyWith({List<Message>? messages, int? unreadCount, bool? isFavorite}) {
+  Conversation copyWith({
+    int? id,
+    String? sender,
+    List<Message>? messages,
+  }) {
     return Conversation(
-      id: id,
-      sender: sender,
-      messages: messages ?? this.messages,
-      isFavorite: isFavorite ?? this.isFavorite,
+      id: id ?? this.id,
+      sender: sender ?? this.sender,
+      messages: messages ?? List<Message>.from(this.messages),
     );
   }
 }

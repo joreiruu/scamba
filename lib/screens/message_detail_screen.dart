@@ -259,113 +259,120 @@ void _toggleFavoriteAndExitSelection(Message message) {
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: widget.conversation.messages.length,
+              itemCount: widget.conversation.orderedMessages.length,
               itemBuilder: (context, index) {
-                final message = widget.conversation.messages[index];
+                final message = widget.conversation.orderedMessages[index];
                 final bool isSentByUser = message.sender == "You";
-                final double spamConfidence = _generateSpamConfidence();
                 final bool isMessageSelected = selectedMessages.contains(message);
 
-                return // Replace the message rendering part in your ListView.builder with this code
-// Place this code in your ListView.builder itemBuilder callback
-GestureDetector(
-  onLongPress: () => _handleLongPress(message),
-  onTap: isSelectionMode ? () => _toggleMessageSelection(message) : null,
-  child: Column(
-    crossAxisAlignment: isSentByUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-    children: [
-      LayoutBuilder(
-        builder: (context, constraints) {
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.8,
-                ),
-                decoration: BoxDecoration(
-                  color: isMessageSelected 
-                      ? Color.fromRGBO(33, 150, 243, 0.3)
-                      : (message.isSpam ? spamBgColor : hamBgColor),
-                  borderRadius: BorderRadius.circular(12),
-                  border: isMessageSelected 
-                      ? Border.all(color: Colors.blue, width: 2) 
-                      : null,
-                ),
-                padding: EdgeInsets.only(
-                  left: 12.0, 
-                  top: 12.0, 
-                  right: 12.0,
-                  // Add extra padding at the bottom if favorited to make room for the icon
-                  bottom: (message.isFavorite && !isSelectionMode) ? 22.0 : 12.0,
-                ),      
-                child: Text(
-                  message.content,
-                  style: TextStyle(
-                    color: message.isSpam ? spamTextColor : hamTextColor,
-                    fontSize: 16,
+                return GestureDetector(
+                  onLongPress: () => _handleLongPress(message),
+                  onTap: isSelectionMode ? () => _toggleMessageSelection(message) : null,
+                  child: Column(
+                    crossAxisAlignment: isSentByUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                    children: [
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          return Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Container(
+                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                constraints: BoxConstraints(
+                                  maxWidth: MediaQuery.of(context).size.width * 0.8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isMessageSelected 
+                                      ? Color.fromRGBO(33, 150, 243, 0.3)
+                                      : (message.isSpam ? spamBgColor : hamBgColor),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: isMessageSelected 
+                                      ? Border.all(color: Colors.blue, width: 2) 
+                                      : null,
+                                ),
+                                padding: EdgeInsets.only(
+                                  left: 12.0, 
+                                  top: 12.0, 
+                                  right: 12.0,
+                                  bottom: (message.isFavorite && !isSelectionMode) ? 22.0 : 12.0,
+                                ),      
+                                child: Text(
+                                  message.content,
+                                  style: TextStyle(
+                                    color: message.isSpam ? spamTextColor : hamTextColor,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                              
+                              if (message.isFavorite && !isSelectionMode)
+                                Positioned(
+                                  right: 8,
+                                  bottom: 4,
+                                  child: Icon(
+                                    Icons.favorite,
+                                    size: 16,
+                                    color: Colors.red[400],
+                                  ),
+                                ),
+                            ],
+                          );
+                        }
+                      ),
+                      
+                      if (message.isClassified)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 100,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(3),
+                                  color: Colors.blue[200],
+                                ),
+                                child: FractionallySizedBox(
+                                  widthFactor: message.spamConfidence / 100,
+                                  alignment: Alignment.centerLeft,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(3),
+                                      color: Colors.red,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                message.isSpam
+                                    ? '${message.spamConfidence.toStringAsFixed(0)}% Spam'
+                                    : 'HAM',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: message.isSpam ? Colors.red[700] : Colors.green[700],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (!message.isClassified)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Text(
+                            'Waiting...',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
-                ),
-              ),
-              
-              // Position heart precisely in the bottom right with proper padding
-              if (message.isFavorite && !isSelectionMode)
-                Positioned(
-                  right: 8,  // Position from right edge of the bubble
-                  bottom: 4, // Position from bottom edge of the bubble
-                  child: Icon(
-                    Icons.favorite,
-                    size: 16,
-                    color: Colors.red[400],
-                  ),
-                ),
-            ],
-          );
-        }
-      ),
-      
-      if (message.isSpam)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8.0),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 100,
-                height: 6,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(3),
-                  color: Colors.blue[200],
-                ),
-                child: FractionallySizedBox(
-                  widthFactor: spamConfidence,
-                  alignment: Alignment.centerLeft,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(3),
-                      color: Colors.red,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '${(spamConfidence * 100).toStringAsFixed(0)}% Spam',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.red[700],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-    ],
-  ),
-);
-
-
+                );
               },
             ),
           ),

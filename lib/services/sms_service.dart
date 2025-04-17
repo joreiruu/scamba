@@ -18,50 +18,61 @@ class SmsService {
     }
 
     try {
-      // Get all messages without limit
       final messages = await _query.getAllSms;
-
-      // Group messages by sender
       final Map<String, List<SmsMessage>> groupedMessages = {};
+      
+      // Group messages by sender
       for (var sms in messages) {
         final sender = sms.sender ?? 'Unknown';
         groupedMessages.putIfAbsent(sender, () => []);
         groupedMessages[sender]!.add(sms);
       }
 
-      // Process each group of messages
       List<Conversation> conversations = [];
+      int processedCount = 0;
+      
       for (var entry in groupedMessages.entries) {
-        List<Message> processedMessages = [];
-        
-        for (var sms in entry.value) {
-          // Classify each message
-          Map<String, dynamic> classification;
-          try {
-            classification = await _classifier.classifyMessage(sms.body ?? '');
-          } catch (e) {
-            print('Classification failed for message: ${e.toString()}');
-            classification = {'predicted_class': 0, 'confidence': 0.0};
-          }
-
-          processedMessages.add(Message(
-            id: sms.id?.hashCode ?? 0,
-            sender: sms.sender ?? 'Unknown',
-            content: sms.body ?? '',
-            isRead: false,
-            isSpam: classification['predicted_class'] == 1,
-            spamConfidence: classification['confidence'] ?? 0.0,
-            timestamp: sms.date ?? DateTime.now(),
-          ));
-        }
+        List<Message> processedMessages = entry.value.map((sms) => Message(
+          id: sms.id?.hashCode ?? 0,
+          sender: sms.sender ?? 'Unknown',
+          content: sms.body ?? '',
+          timestamp: sms.date ?? DateTime.now(),
+          isRead: sms.read ?? false,
+          isClassified: false,  // Initially mark as unclassified
+        )).toList();
 
         conversations.add(Conversation(
           id: entry.key.hashCode,
           sender: entry.key,
           messages: processedMessages,
         ));
+
+        // Only process first 10 conversations
+        if (processedCount < 10) {
+          // Classify messages for this conversation
+          List<String> messageBodies = entry.value
+              .map((sms) => sms.body ?? '')
+              .where((body) => body.isNotEmpty)
+              .toList();
+              
+          final classifications = await _classifier.classifyBatch(messageBodies);
+          
+          for (var i = 0; i < processedMessages.length; i++) {
+            var classification = classifications[i];
+            processedMessages[i] = processedMessages[i].copyWith(
+              isSpam: classification['predicted_class'] == 1,
+              spamConfidence: classification['confidence'] ?? 0.0,
+              isClassified: true,
+            );
+          }
+        }
+        
+        processedCount++;
       }
 
+      // Sort conversations by most recent message
+      conversations.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+      
       return conversations;
     } catch (e) {
       print('Error loading SMS messages: $e');
