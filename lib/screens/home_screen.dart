@@ -178,10 +178,21 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
 
   Widget _buildConversationList(List<model.Conversation> conversationList) {
     final filterProvider = Provider.of<FilterProvider>(context);
+    final conversationProvider = Provider.of<ConversationProvider>(context);
 
+    // Filter out archived conversations from the main list
+    final nonArchivedConversations = conversationList.where((conv) => 
+      !conversationProvider.archivedConversations.any((archived) => 
+        archived.id == conv.id
+      )
+    ).toList();
+
+    // Update the spam filtering logic to check messages
     final filteredList = (filterProvider.selectedTab == 'All Messages' && filterProvider.filterHamMessages)
-        ? conversationList.where((c) => !c.messages.last.isSpam).toList()
-        : conversationList;
+        ? nonArchivedConversations.where((conv) => 
+            !conv.messages.any((message) => message.isSpam)
+          ).toList()
+        : nonArchivedConversations;
 
     return ListView.builder(
       itemCount: filteredList.length,
@@ -359,45 +370,39 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
   }
 
   void _archiveSelected() {
+    final provider = Provider.of<ConversationProvider>(context, listen: false);
+    final selectedConversations = provider.conversations
+        .where((conversation) => selectedMessages.contains(conversation.id))
+        .toList();
+    
+    // Archive each selected conversation
+    for (final conversation in selectedConversations) {
+      provider.archiveConversation(conversation);
+    }
+    
+    // Clear selection
     setState(() {
-      // Find selected conversations
-      List<model.Conversation> toArchive = conversations
-          .where((conversation) => selectedMessages.contains(conversation.id))
-          .toList();
-      
-      // Add to archived list
-      archivedConversations.addAll(toArchive);
-      
-      // Remove from main conversations list
-      conversations.removeWhere((conversation) => selectedMessages.contains(conversation.id));
-      
-      // Track the number of archived conversations
-      int archivedCount = toArchive.length;
-      
-      // Clear selection
       selectedMessages.clear();
       selectionMode = false;
-
-      // Show confirmation snackbar--------------------------
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Archived $archivedCount conversation${archivedCount != 1 ? 's' : ''}',
-          ),
-          backgroundColor: Color(0xFF85BBD9),
-          action: SnackBarAction(
-            label: 'Undo',
-            onPressed: () {
-              setState(() {
-                // Move back from archived to main list
-                conversations.addAll(archivedConversations);
-                archivedConversations.clear();
-              });
-            },
-          ),
-        ),
-      );
     });
+
+    // Show confirmation snackbar
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Archived ${selectedConversations.length} conversation${selectedConversations.length != 1 ? 's' : ''}',
+        ),
+        backgroundColor: const Color(0xFF85BBD9),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () {
+            for (final conversation in selectedConversations) {
+              provider.restoreArchivedConversation(conversation);
+            }
+          },
+        ),
+      ),
+    );
   }
 
   void _deleteSelected() {
@@ -440,10 +445,8 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
   }
 
   void archiveSingleConversation(model.Conversation conversation) {
-    setState(() {
-      archivedConversations.add(conversation);
-      conversations.remove(conversation);
-    });
+    final provider = Provider.of<ConversationProvider>(context, listen: false);
+    provider.archiveConversation(conversation);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -452,10 +455,7 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
         action: SnackBarAction(
           label: 'Undo',
           onPressed: () {
-            setState(() {
-              conversations.add(conversation);
-              archivedConversations.remove(conversation);
-            });
+            provider.restoreArchivedConversation(conversation);
           },
         ),
       ),

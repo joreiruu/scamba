@@ -104,65 +104,36 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
   }
 
   void _showMoreOptions(BuildContext context) {
-  final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-  
-  final RelativeRect position = RelativeRect.fromLTRB(
-    overlay.size.width - 180,
-    kToolbarHeight + 20,
-    0,
-    0
-  );
+  final provider = Provider.of<ConversationProvider>(context, listen: false);
+  final isArchived = provider.archivedConversations
+      .any((conv) => conv.id == widget.conversation.id);
 
-  showMenu(
+  showModalBottomSheet(
     context: context,
-    position: position,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(12),
-    ),
-    items: [
-      PopupMenuItem(
-        child: const Row(
-          children: [
-            SizedBox(width: 4),
-            Text('Delete'),
-          ],
-        ),
-        onTap: () {
-  final conversationProvider = Provider.of<ConversationProvider>(context, listen: false);
-
-  conversationProvider.deleteConversation(widget.conversation);
-
-  setState(() {}); // Force UI refresh
-  
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (mounted) Navigator.of(context).pop();
-  });
-},
-
-
-      ),
-      PopupMenuItem(
-        child: const Row(
-          children: [
-            SizedBox(width: 4),
-            Text('Archive'),
-          ],
-        ),
-        onTap: () {
-  // Store provider reference before entering async gap
-  final conversationProvider = Provider.of<ConversationProvider>(context, listen: false);
-  final navigator = Navigator.of(context); // Store navigator reference
-
-  conversationProvider.archiveConversation(widget.conversation);
-
-  // Ensure widget is still mounted before calling navigator
-  if (mounted) {
-    navigator.pop();
-  }
-},
-
-      ),
-    ],
+    builder: (context) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: Icon(
+              isArchived ? Icons.unarchive_outlined : Icons.archive_outlined,
+              color: Colors.black54,
+            ),
+            title: Text(isArchived ? 'Unarchive' : 'Archive'),
+            onTap: () {
+              if (isArchived) {
+                provider.restoreArchivedConversation(widget.conversation);
+              } else {
+                provider.archiveConversation(widget.conversation);
+              }
+              Navigator.pop(context); // Close bottom sheet
+              Navigator.pop(context); // Return to previous screen
+            },
+          ),
+          // ...other menu options...
+        ],
+      );
+    },
   );
 }
 

@@ -3,10 +3,17 @@ import 'package:permission_handler/permission_handler.dart';
 import '../models/conversation_model.dart';
 import '../models/message_model.dart';
 import 'spam_classifier_service.dart';
+import 'dart:async';
 
 class SmsService {
   final SmsQuery _query = SmsQuery();
   final SpamClassifierService _classifier = SpamClassifierService();
+
+  // Add stream controller
+  final _conversationsController = StreamController<List<Conversation>>.broadcast();
+  
+  // Add stream getter
+  Stream<List<Conversation>> get conversationsStream => _conversationsController.stream;
 
   Future<List<Conversation>> getConversations() async {
     var permission = await Permission.sms.status;
@@ -73,10 +80,29 @@ class SmsService {
       // Sort conversations by most recent message
       conversations.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
       
+      // Add conversations to stream
+      _conversationsController.add(conversations);
       return conversations;
     } catch (e) {
       print('Error loading SMS messages: $e');
       return [];
     }
+  }
+
+  // Add refreshConversations method
+  Future<void> refreshConversations() async {
+    try {
+      final conversations = await getConversations();
+      if (conversations != null) {
+        _conversationsController.add(conversations);
+      }
+    } catch (e) {
+      print('Error refreshing conversations: $e');
+    }
+  }
+
+  // Add dispose method
+  void dispose() {
+    _conversationsController.close();
   }
 }
