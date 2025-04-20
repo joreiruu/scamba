@@ -38,27 +38,20 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
     _tabController = TabController(length: 2, vsync: this);
     _loadMessages();
     
-    // Set up auto-refresh timer
-    _refreshTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    // Increase refresh interval to reduce unnecessary updates
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       _loadMessages();
     });
   }
 
   Future<void> _loadMessages() async {
     try {
+      final provider = Provider.of<ConversationProvider>(context, listen: false);
       final loadedConversations = await _smsService.getConversations();
-      
-      // Only update if there are changes
-      if (!listEquals(loadedConversations, conversations)) {
-        setState(() {
-          conversations = loadedConversations;
-          // Initialize the provider with real SMS data
-          Provider.of<ConversationProvider>(context, listen: false)
-            .loadConversations(loadedConversations);
-        });
+      if (loadedConversations != null) {
+        provider.loadConversations(loadedConversations);
       }
     } catch (e) {
-      // Only show error if not disposed
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error loading messages: $e')),

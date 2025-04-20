@@ -115,6 +115,7 @@ class ConversationProvider with ChangeNotifier {
 
   // Archive a conversation
   void archiveConversation(Conversation conversation) {
+    print('Archiving conversation: ${conversation.id}'); // Debug log
     if (!_persistentArchivedIds.contains(conversation.id)) {
       _persistentArchivedIds.add(conversation.id);
       _conversations.removeWhere((conv) => conv.id == conversation.id);
@@ -143,6 +144,7 @@ class ConversationProvider with ChangeNotifier {
 
   // Restore an archived conversation
   void restoreArchivedConversation(Conversation conversation) {
+    print('Restoring conversation: ${conversation.id}'); // Debug log
     if (_persistentArchivedIds.contains(conversation.id)) {
       _persistentArchivedIds.remove(conversation.id);
       _archivedConversations.removeWhere((conv) => conv.id == conversation.id);
@@ -372,7 +374,6 @@ class ConversationProvider with ChangeNotifier {
 
   Future<void> refreshConversations() async {
     try {
-      // Only load saved states on first initialization
       if (!_isInitialized) {
         await _loadArchivedIds();
         await _loadReadStatus();
@@ -399,44 +400,38 @@ class ConversationProvider with ChangeNotifier {
           }
         }
 
-        if (!_areListsEqual(_conversations, newConversations) ||
-            !_areListsEqual(_archivedConversations, newArchivedConversations)) {
-          _conversations = newConversations;
-          _archivedConversations = newArchivedConversations;
-          notifyListeners();
-        }
+        _conversations = newConversations;
+        _archivedConversations = newArchivedConversations;
+        notifyListeners();
       }
     } catch (e) {
       print('Error refreshing conversations: $e');
     }
   }
 
-  // Helper method to compare lists
-  bool _areListsEqual(List<Conversation> list1, List<Conversation> list2) {
-    if (list1.length != list2.length) return false;
-    for (int i = 0; i < list1.length; i++) {
-      if (list1[i].id != list2[i].id) return false;
-    }
-    return true;
-  }
-
   Future<void> _saveArchivedIds() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_archivedIdsKey, jsonEncode(_persistentArchivedIds.toList()));
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final archivedIdsList = _persistentArchivedIds.toList();
+      await prefs.setString(_archivedIdsKey, jsonEncode(archivedIdsList));
+      print('Saved archived IDs: $archivedIdsList'); // Debug log
+    } catch (e) {
+      print('Error saving archived IDs: $e');
+    }
   }
 
   Future<void> _loadArchivedIds() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? archivedIdsJson = prefs.getString(_archivedIdsKey);
-    if (archivedIdsJson != null) {
-      final List<dynamic> archivedIds = jsonDecode(archivedIdsJson);
-      // Filter conversations to archived and non-archived
-      _archivedConversations = _conversations
-          .where((conv) => archivedIds.contains(conv.id))
-          .toList();
-      _conversations = _conversations
-          .where((conv) => !archivedIds.contains(conv.id))
-          .toList();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? archivedIdsJson = prefs.getString(_archivedIdsKey);
+      if (archivedIdsJson != null) {
+        final List<dynamic> archivedIds = jsonDecode(archivedIdsJson);
+        _persistentArchivedIds.clear();
+        _persistentArchivedIds.addAll(archivedIds.cast<int>());
+        print('Loaded archived IDs: $_persistentArchivedIds'); // Debug log
+      }
+    } catch (e) {
+      print('Error loading archived IDs: $e');
     }
   }
 
