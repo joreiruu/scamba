@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/conversation_model.dart';
 import '../models/message_model.dart';
 import '../services/sms_service.dart';
@@ -17,17 +19,30 @@ class ConversationProvider with ChangeNotifier {
   static const refreshInterval = Duration(seconds: 5);
   Timer? _autoRefreshTimer;
 
-  ConversationProvider() {
-    // Initial load
-    refreshConversations();
+  // Add these keys for SharedPreferences
+  static const String _archivedIdsKey = 'archived_conversation_ids';
+  static const String _readMessageIdsKey = 'read_message_ids';
 
-    // Listen to SMS updates
-    _subscription = _smsService.conversationsStream.listen((conversations) {
+  // Add a flag to track initial load
+  bool _isInitialized = false;
+  final Set<int> _persistentArchivedIds = {};
+
+  ConversationProvider() {
+    // Load saved states immediately
+    Future(() async {
+      await _loadArchivedIds();
+      await _loadReadStatus();
+      await refreshConversations();
       notifyListeners();
     });
 
     // Set up auto-refresh
-    _autoRefreshTimer = Timer.periodic(refreshInterval, (_) {
+    _autoRefreshTimer = Timer.periodic(refreshInterval, (_) async {
+      await refreshConversations();
+    });
+
+    // Listen to SMS updates
+    _subscription = _smsService.conversationsStream.listen((conversations) {
       refreshConversations();
     });
   }
@@ -100,20 +115,13 @@ class ConversationProvider with ChangeNotifier {
 
   // Archive a conversation
   void archiveConversation(Conversation conversation) {
-    print('Archiving conversation: ${conversation.id}');
-    
-    // Remove from main conversations
-    _conversations.removeWhere((conv) => conv.id == conversation.id);
-    
-    // Add to archived conversations if not already present
-    if (!_archivedConversations.any((conv) => conv.id == conversation.id)) {
+    if (!_persistentArchivedIds.contains(conversation.id)) {
+      _persistentArchivedIds.add(conversation.id);
+      _conversations.removeWhere((conv) => conv.id == conversation.id);
       _archivedConversations.add(conversation);
-    }
-    
-    // Force refresh conversations asynchronously
-    _smsService.refreshConversations().then((_) {
+      _saveArchivedIds();
       notifyListeners();
-    });
+    }
   }
 
   // Delete a conversation
@@ -135,15 +143,13 @@ class ConversationProvider with ChangeNotifier {
 
   // Restore an archived conversation
   void restoreArchivedConversation(Conversation conversation) {
-    _archivedConversations.removeWhere((conv) => conv.id == conversation.id);
-    if (!_conversations.any((conv) => conv.id == conversation.id)) {
+    if (_persistentArchivedIds.contains(conversation.id)) {
+      _persistentArchivedIds.remove(conversation.id);
+      _archivedConversations.removeWhere((conv) => conv.id == conversation.id);
       _conversations.add(conversation);
+      _saveArchivedIds();
+      notifyListeners();
     }
-    
-    // Force refresh the conversations
-    _smsService.refreshConversations();
-    
-    notifyListeners();
   }
 
   // Permanently delete a conversation
@@ -183,42 +189,57 @@ class ConversationProvider with ChangeNotifier {
 
   // Mark all messages in a conversation as read
   void markConversationAsRead(Conversation conversation) {
-    final index = _conversations.indexWhere((conv) => conv.id == conversation.id);
-    if (index != -1) {
-      List<Message> updatedMessages = _conversations[index]
-          .messages
-          .map((message) => message.copyWith(isRead: true))
-          .toList();
-
-      _conversations[index] = _conversations[index].copyWith(messages: updatedMessages);
-      notifyListeners();
+    bool changed = false;
+    for (var message in conversation.messages) {
+      if (!message.isRead) {
+        message.isRead = true;
+        _messageReadStatus[message.id] = true;
+        changed = true;
+      }
+    }
+    
+    if (changed) {
+      _saveReadStatus().then((_) {
+        print('Read status saved for conversation ${conversation.id}'); // Debug log
+        notifyListeners();
+      });
     }
   }
 
   void markAllAsRead() {
     bool anyChanges = false;
     
-    // Loop through all conversations
-    for (var i = 0; i < _conversations.length; i++) {
-      // Check if there are any unread messages in this conversation
-      bool hasUnreadMessages = _conversations[i].messages.any((msg) => !msg.isRead);
-      
-      if (hasUnreadMessages) {
-        // Create new list of all read messages
-        List<Message> updatedMessages = _conversations[i].messages.map((message) => 
-          message.isRead ? message : message.copyWith(isRead: true)
-        ).toList();
-        
-        // Update the conversation with all read messages
-        _conversations[i] = _conversations[i].copyWith(messages: updatedMessages);
-        anyChanges = true;
+    // Mark messages as read in main conversations
+    for (var conversation in _conversations) {
+      for (var message in conversation.messages) {
+        if (!message.isRead) {
+          message.isRead = true;
+          _messageReadStatus[message.id] = true;
+          anyChanges = true;
+        }
+      }
+    }
+
+    // Also mark messages as read in archived conversations
+    for (var conversation in _archivedConversations) {
+      for (var message in conversation.messages) {
+        if (!message.isRead) {
+          message.isRead = true;
+          _messageReadStatus[message.id] = true;
+          anyChanges = true;
+        }
       }
     }
     
-    // Only notify if changes were made
     if (anyChanges) {
+      _saveReadStatus(); // Save read status immediately
       notifyListeners();
     }
+  }
+
+  // Get unread count for a conversation
+  int getUnreadCount(Conversation conversation) {
+    return conversation.messages.where((msg) => !msg.isRead).length;
   }
 
   // Get deletion time for a conversation
@@ -351,22 +372,124 @@ class ConversationProvider with ChangeNotifier {
 
   Future<void> refreshConversations() async {
     try {
+      // Only load saved states on first initialization
+      if (!_isInitialized) {
+        await _loadArchivedIds();
+        await _loadReadStatus();
+        _isInitialized = true;
+      }
+
       final conversations = await _smsService.getConversations();
       if (conversations != null) {
-        _preserveReadStatus(conversations);
-        
-        // Ensure archived conversations stay archived
-        final archivedIds = Set<int>.from(_archivedConversations.map((c) => c.id));
-        _conversations = conversations.where((conv) => !archivedIds.contains(conv.id)).toList();
-        
-        // Update archived conversations with fresh data while preserving archive status
-        _archivedConversations = conversations
-            .where((conv) => archivedIds.contains(conv.id))
-            .toList();
+        final newConversations = <Conversation>[];
+        final newArchivedConversations = <Conversation>[];
+
+        for (var conv in conversations) {
+          // Apply existing read status
+          for (var msg in conv.messages) {
+            if (_messageReadStatus.containsKey(msg.id)) {
+              msg.isRead = _messageReadStatus[msg.id]!;
+            }
+          }
+
+          if (_persistentArchivedIds.contains(conv.id)) {
+            newArchivedConversations.add(conv);
+          } else {
+            newConversations.add(conv);
+          }
+        }
+
+        if (!_areListsEqual(_conversations, newConversations) ||
+            !_areListsEqual(_archivedConversations, newArchivedConversations)) {
+          _conversations = newConversations;
+          _archivedConversations = newArchivedConversations;
+          notifyListeners();
+        }
       }
-      notifyListeners();
     } catch (e) {
       print('Error refreshing conversations: $e');
+    }
+  }
+
+  // Helper method to compare lists
+  bool _areListsEqual(List<Conversation> list1, List<Conversation> list2) {
+    if (list1.length != list2.length) return false;
+    for (int i = 0; i < list1.length; i++) {
+      if (list1[i].id != list2[i].id) return false;
+    }
+    return true;
+  }
+
+  Future<void> _saveArchivedIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_archivedIdsKey, jsonEncode(_persistentArchivedIds.toList()));
+  }
+
+  Future<void> _loadArchivedIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? archivedIdsJson = prefs.getString(_archivedIdsKey);
+    if (archivedIdsJson != null) {
+      final List<dynamic> archivedIds = jsonDecode(archivedIdsJson);
+      // Filter conversations to archived and non-archived
+      _archivedConversations = _conversations
+          .where((conv) => archivedIds.contains(conv.id))
+          .toList();
+      _conversations = _conversations
+          .where((conv) => !archivedIds.contains(conv.id))
+          .toList();
+    }
+  }
+
+  Future<void> _saveReadStatus() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final Map<String, dynamic> statusMap = {};
+      
+      // Convert int keys to strings for JSON serialization
+      _messageReadStatus.forEach((key, value) {
+        statusMap[key.toString()] = value;
+      });
+      
+      final String jsonString = jsonEncode(statusMap);
+      await prefs.setString(_readMessageIdsKey, jsonString);
+      print('Saved read status: $jsonString'); // Debug log
+    } catch (e) {
+      print('Error saving read status: $e');
+    }
+  }
+
+  Future<void> _loadReadStatus() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? readStatusJson = prefs.getString(_readMessageIdsKey);
+      print('Loaded read status: $readStatusJson'); // Debug log
+      
+      if (readStatusJson != null) {
+        final Map<String, dynamic> readStatus = jsonDecode(readStatusJson);
+        _messageReadStatus.clear();
+        
+        // Convert string keys back to int
+        readStatus.forEach((key, value) {
+          _messageReadStatus[int.parse(key)] = value;
+        });
+        
+        // Apply read status to all conversations
+        _applyReadStatus(_conversations);
+        _applyReadStatus(_archivedConversations);
+      }
+    } catch (e) {
+      print('Error loading read status: $e');
+    }
+  }
+
+  // Add helper method to apply read status
+  void _applyReadStatus(List<Conversation> conversations) {
+    for (var conv in conversations) {
+      for (var msg in conv.messages) {
+        if (_messageReadStatus.containsKey(msg.id)) {
+          msg.isRead = _messageReadStatus[msg.id]!;
+        }
+      }
     }
   }
 

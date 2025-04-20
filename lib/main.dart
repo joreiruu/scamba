@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:scamba/providers/theme_provider.dart';
-import 'package:scamba/providers/filter_provider.dart'; // ✅ Added FilterProvider import
-import 'package:scamba/providers/conversation_provider.dart'; 
-import 'screens/splash_screen.dart'; // Import the SplashScreen
+import 'package:scamba/providers/filter_provider.dart';
+import 'package:scamba/providers/conversation_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Import SharedPreferences
+import 'screens/splash_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SharedPreferences.getInstance(); // Initialize SharedPreferences
+  
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (context) => ThemeProvider()), // ✅ Theme Provider
-        ChangeNotifierProvider(create: (context) => FilterProvider()), // ✅ Added FilterProvider to manage message filtering
+        ChangeNotifierProvider(create: (context) => ThemeProvider()),
+        ChangeNotifierProvider(create: (context) => FilterProvider()),
         ChangeNotifierProvider(create: (context) => ConversationProvider()),
       ],
       child: const MyApp(),
@@ -28,7 +32,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Scamba',
-      themeMode: themeProvider.themeMode, // Apply ThemeProvider's mode
+      themeMode: themeProvider.themeMode,
       theme: ThemeData(
         brightness: Brightness.light,
         primarySwatch: Colors.blue,
