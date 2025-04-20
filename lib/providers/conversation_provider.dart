@@ -8,7 +8,7 @@ import '../services/sms_service.dart';
 
 class ConversationProvider with ChangeNotifier {
   List<Conversation> _conversations = [];
-  final List<Conversation> _deletedConversations = [];
+  List<Conversation> _deletedConversations = [];
   List<Conversation> _archivedConversations = [];
   final List<Conversation> _favoriteConversations = [];
   final Map<String, DateTime> _deletedAtMap = {};
@@ -22,15 +22,18 @@ class ConversationProvider with ChangeNotifier {
   // Add these keys for SharedPreferences
   static const String _archivedIdsKey = 'archived_conversation_ids';
   static const String _readMessageIdsKey = 'read_message_ids';
+  static const String _deletedIdsKey = 'deleted_conversation_ids';
 
-  // Add a flag to track initial load
+  // Add flags to track initial load
   bool _isInitialized = false;
   final Set<int> _persistentArchivedIds = {};
+  final Set<int> _persistentDeletedIds = {};
 
   ConversationProvider() {
     // Load saved states immediately
     Future(() async {
       await _loadArchivedIds();
+      await _loadDeletedIds();
       await _loadReadStatus();
       await refreshConversations();
       notifyListeners();
@@ -130,15 +133,17 @@ class ConversationProvider with ChangeNotifier {
     _conversations.removeWhere((conv) => conv.id == conversation.id);
     _archivedConversations.removeWhere((conv) => conv.id == conversation.id);
     _deletedConversations.add(conversation);
-    _deletedAtMap[conversation.id.toString()] = DateTime.now();
+    _persistentDeletedIds.add(conversation.id);
+    _saveDeletedIds();
     notifyListeners();
   }
 
   // Restore a deleted conversation
   void restoreDeletedConversation(Conversation conversation) {
     _deletedConversations.removeWhere((conv) => conv.id == conversation.id);
+    _persistentDeletedIds.remove(conversation.id);
     _conversations.add(conversation);
-    _deletedAtMap.remove(conversation.id.toString());
+    _saveDeletedIds();
     notifyListeners();
   }
 
@@ -376,6 +381,7 @@ class ConversationProvider with ChangeNotifier {
     try {
       if (!_isInitialized) {
         await _loadArchivedIds();
+        await _loadDeletedIds();
         await _loadReadStatus();
         _isInitialized = true;
       }
@@ -384,6 +390,7 @@ class ConversationProvider with ChangeNotifier {
       if (conversations != null) {
         final newConversations = <Conversation>[];
         final newArchivedConversations = <Conversation>[];
+        final newDeletedConversations = <Conversation>[];
 
         for (var conv in conversations) {
           // Apply existing read status
@@ -393,7 +400,9 @@ class ConversationProvider with ChangeNotifier {
             }
           }
 
-          if (_persistentArchivedIds.contains(conv.id)) {
+          if (_persistentDeletedIds.contains(conv.id)) {
+            newDeletedConversations.add(conv);
+          } else if (_persistentArchivedIds.contains(conv.id)) {
             newArchivedConversations.add(conv);
           } else {
             newConversations.add(conv);
@@ -402,6 +411,7 @@ class ConversationProvider with ChangeNotifier {
 
         _conversations = newConversations;
         _archivedConversations = newArchivedConversations;
+        _deletedConversations = newDeletedConversations;
         notifyListeners();
       }
     } catch (e) {
@@ -432,6 +442,32 @@ class ConversationProvider with ChangeNotifier {
       }
     } catch (e) {
       print('Error loading archived IDs: $e');
+    }
+  }
+
+  Future<void> _saveDeletedIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final deletedIdsList = _persistentDeletedIds.toList();
+      await prefs.setString(_deletedIdsKey, jsonEncode(deletedIdsList));
+      print('Saved deleted IDs: $deletedIdsList'); // Debug log
+    } catch (e) {
+      print('Error saving deleted IDs: $e');
+    }
+  }
+
+  Future<void> _loadDeletedIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? deletedIdsJson = prefs.getString(_deletedIdsKey);
+      if (deletedIdsJson != null) {
+        final List<dynamic> deletedIds = jsonDecode(deletedIdsJson);
+        _persistentDeletedIds.clear();
+        _persistentDeletedIds.addAll(deletedIds.cast<int>());
+        print('Loaded deleted IDs: $_persistentDeletedIds'); // Debug log
+      }
+    } catch (e) {
+      print('Error loading deleted IDs: $e');
     }
   }
 

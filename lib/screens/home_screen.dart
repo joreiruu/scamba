@@ -26,9 +26,6 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
   final SmsService _smsService = SmsService();
   bool selectionMode = false;
   Set<int> selectedMessages = {};
-  List<model.Conversation> conversations = [];
-  List<model.Conversation> archivedConversations = [];
-  List<model.Conversation> deletedConversations = [];
   bool _isLoading = false;
   Timer? _refreshTimer;
 
@@ -173,19 +170,18 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
     final filterProvider = Provider.of<FilterProvider>(context);
     final conversationProvider = Provider.of<ConversationProvider>(context);
 
-    // Filter out archived conversations from the main list
-    final nonArchivedConversations = conversationList.where((conv) => 
-      !conversationProvider.archivedConversations.any((archived) => 
-        archived.id == conv.id
-      )
+    // Filter out both archived and deleted conversations
+    final filteredConversations = conversationList.where((conv) => 
+      !conversationProvider.archivedConversations.any((archived) => archived.id == conv.id) &&
+      !conversationProvider.deletedConversations.any((deleted) => deleted.id == conv.id)
     ).toList();
 
-    // Update the spam filtering logic to check messages
+    // Apply spam filtering
     final filteredList = (filterProvider.selectedTab == 'All Messages' && filterProvider.filterHamMessages)
-        ? nonArchivedConversations.where((conv) => 
+        ? filteredConversations.where((conv) => 
             !conv.messages.any((message) => message.isSpam)
           ).toList()
-        : nonArchivedConversations;
+        : filteredConversations;
 
     return ListView.builder(
       itemCount: filteredList.length,
@@ -329,12 +325,10 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
 
   void _markMessageAsRead(Message message, List<Message> messages) {
     setState(() {
-      for (var i = 0; i < conversations.length; i++) {
-        if (conversations[i].sender == message.sender) {
-          conversations[i] = conversations[i].copyWith(
-            messages: conversations[i].messages.map((m) {
-              return m.copyWith(isRead: true);
-            }).toList(),
+      for (var i = 0; i < messages.length; i++) {
+        if (messages[i].sender == message.sender) {
+          messages[i] = messages[i].copyWith(
+            isRead: true,
           );
           break;
         }
@@ -399,40 +393,57 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
   }
 
   void _deleteSelected() {
-    // Store selected conversations for undo
-    List<model.Conversation> selectedConversations = conversations
+    final provider = Provider.of<ConversationProvider>(context, listen: false);
+    final selectedConversations = provider.conversations
         .where((conversation) => selectedMessages.contains(conversation.id))
         .toList();
     
+    // Delete each selected conversation through the provider
+    for (final conversation in selectedConversations) {
+      provider.deleteConversation(conversation);
+    }
+    
+    // Clear selection
     setState(() {
-      // Add to deleted list
-      deletedConversations.addAll(selectedConversations);
-      
-      // Remove from main list
-      conversations.removeWhere((conversation) => selectedMessages.contains(conversation.id));
-      
-      // Clear selection
       selectedMessages.clear();
       selectionMode = false;
     });
-    
-    // Show confirmation snackbar---------------------
+
+    // Show confirmation snackbar
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           'Deleted ${selectedConversations.length} conversation${selectedConversations.length != 1 ? 's' : ''}',
         ),
-        backgroundColor: Color(0xFF85BBD9),
+        backgroundColor: const Color(0xFF85BBD9),
         action: SnackBarAction(
           label: 'Undo',
           onPressed: () {
-            setState(() {
-              // Move back from deleted to main list
-              conversations.addAll(deletedConversations);
-              deletedConversations.clear();
-            });
+            for (final conversation in selectedConversations) {
+              provider.restoreDeletedConversation(conversation);
+            }
           },
         ),
+        duration: const Duration(seconds: 5),
+      ),
+    );
+  }
+
+  void deleteSingleConversation(model.Conversation conversation) {
+    final provider = Provider.of<ConversationProvider>(context, listen: false);
+    provider.deleteConversation(conversation);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Conversation deleted'),
+        backgroundColor: const Color(0xFF85BBD9),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () {
+            provider.restoreDeletedConversation(conversation);
+          },
+        ),
+        duration: const Duration(seconds: 5),
       ),
     );
   }
@@ -455,45 +466,23 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
     );
   }
 
-  void deleteSingleConversation(model.Conversation conversation) {
-    setState(() {
-      deletedConversations.add(conversation);
-      conversations.remove(conversation);
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Conversation deleted'),
-        backgroundColor: const Color(0xFF85BBD9),
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: () {
-            setState(() {
-              conversations.add(conversation);
-              deletedConversations.remove(conversation);
-            });
-          },
-        ),
-      ),
-    );
-  }
-
   void openArchivedScreen() {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ArchivedScreen(
-          archivedConversations: archivedConversations,
+          archivedConversations: Provider.of<ConversationProvider>(context, listen: false).archivedConversations,
           onUpdate: (unarchived) {
-            setState(() {
-              // Add unarchived conversations back to main list
-              conversations.addAll(unarchived);
-            });
+            final provider = Provider.of<ConversationProvider>(context, listen: false);
+            for (final conversation in unarchived) {
+              provider.restoreArchivedConversation(conversation);
+            }
           },
-          onDelete: (deleted) { // NEW: Handle deleted conversations
-            setState(() {
-              deletedConversations.addAll(deleted); // Move to Recently Deleted
-            });
+          onDelete: (deleted) {
+            final provider = Provider.of<ConversationProvider>(context, listen: false);
+            for (final conversation in deleted) {
+              provider.deleteConversation(conversation);
+            }
           },
         ),
       ),
@@ -505,12 +494,12 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
       context,
       MaterialPageRoute(
         builder: (context) => RecentlyDeletedScreen(
-          deletedConversations: deletedConversations,
+          deletedConversations: Provider.of<ConversationProvider>(context, listen: false).deletedConversations,
           onRestoreConversations: (restored) {
-            setState(() {
-              // Add restored conversations back to main list
-              conversations.addAll(restored);
-            });
+            final provider = Provider.of<ConversationProvider>(context, listen: false);
+            for (final conversation in restored) {
+              provider.restoreDeletedConversation(conversation);
+            }
           },
         ),
       ),
