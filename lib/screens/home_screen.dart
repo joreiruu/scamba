@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';  // Add this import for listEquals
+import 'dart:async';
 import '../widgets/hamburger_menu.dart';
 import '../models/message_model.dart';
 import '../models/conversation_model.dart' as model;
@@ -28,35 +30,46 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
   List<model.Conversation> archivedConversations = [];
   List<model.Conversation> deletedConversations = [];
   bool _isLoading = false;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadMessages();
+    
+    // Set up auto-refresh timer
+    _refreshTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      _loadMessages();
+    });
   }
 
   Future<void> _loadMessages() async {
-    setState(() => _isLoading = true);
     try {
       final loadedConversations = await _smsService.getConversations();
-      setState(() {
-        conversations = loadedConversations;
-        // Initialize the provider with real SMS data
-        Provider.of<ConversationProvider>(context, listen: false)
-          .loadConversations(loadedConversations);
-      });
+      
+      // Only update if there are changes
+      if (!listEquals(loadedConversations, conversations)) {
+        setState(() {
+          conversations = loadedConversations;
+          // Initialize the provider with real SMS data
+          Provider.of<ConversationProvider>(context, listen: false)
+            .loadConversations(loadedConversations);
+        });
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading messages: $e')),
-      );
-    } finally {
-      setState(() => _isLoading = false);
+      // Only show error if not disposed
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading messages: $e')),
+        );
+      }
     }
   }
 
   @override
   void dispose() {
+    _refreshTimer?.cancel(); // Cancel the timer when disposing
     _tabController.dispose();
     super.dispose();
   }
@@ -158,10 +171,6 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
                   ),
                 ],
               ),
-          floatingActionButton: FloatingActionButton(
-            onPressed: _loadMessages,
-            child: const Icon(Icons.refresh),
-          ),
         );
       }
     );
