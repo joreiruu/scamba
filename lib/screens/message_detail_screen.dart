@@ -116,8 +116,8 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
         children: [
           ListTile(
             leading: Icon(
-              isArchived ? Icons.unarchive_outlined : Icons.archive_outlined,
-              color: Colors.black54,
+              isArchived ? Icons.unarchive : Icons.archive,
+              color: Theme.of(context).primaryColor,
             ),
             title: Text(isArchived ? 'Unarchive' : 'Archive'),
             onTap: () {
@@ -128,12 +128,87 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
               }
               Navigator.pop(context); // Close bottom sheet
               Navigator.pop(context); // Return to previous screen
+
+              // Show snackbar
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(isArchived ? 'Conversation unarchived' : 'Conversation archived'),
+                  backgroundColor: const Color(0xFF85BBD9),
+                  action: SnackBarAction(
+                    label: 'Undo',
+                    onPressed: () {
+                      if (isArchived) {
+                        provider.archiveConversation(widget.conversation);
+                      } else {
+                        provider.restoreArchivedConversation(widget.conversation);
+                      }
+                    },
+                  ),
+                  duration: const Duration(seconds: 5),
+                ),
+              );
             },
           ),
-          // ...other menu options...
+          ListTile(
+            leading: const Icon(
+              Icons.delete,
+              color: Colors.red,
+            ),
+            title: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red),
+            ),
+            onTap: () {
+              Navigator.pop(context); // Close bottom sheet
+              _showDeleteConfirmation(context);
+            },
+          ),
         ],
       );
     },
+  );
+}
+
+void _showDeleteConfirmation(BuildContext context) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Delete Conversation'),
+      content: const Text('Are you sure you want to delete this conversation? This can be undone from Recently Deleted.'),
+      actions: [
+        TextButton(
+          child: const Text('Cancel'),
+          onPressed: () => Navigator.pop(context),
+        ),
+        TextButton(
+          child: const Text(
+            'Delete',
+            style: TextStyle(color: Colors.red),
+          ),
+          onPressed: () {
+            final provider = Provider.of<ConversationProvider>(context, listen: false);
+            provider.deleteConversation(widget.conversation);
+            Navigator.pop(context); // Close dialog
+            Navigator.pop(context); // Return to previous screen
+            
+            // Show snackbar with undo option
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Conversation deleted'),
+                backgroundColor: const Color(0xFF85BBD9),
+                action: SnackBarAction(
+                  label: 'Undo',
+                  onPressed: () {
+                    provider.restoreDeletedConversation(widget.conversation);
+                  },
+                ),
+                duration: const Duration(seconds: 5),
+              ),
+            );
+          },
+        ),
+      ],
+    ),
   );
 }
 
