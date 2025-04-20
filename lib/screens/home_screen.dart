@@ -155,9 +155,15 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
             : TabBarView(
                 controller: _tabController,
                 children: [
-                  _buildConversationList(allConversations), 
+                  // All Messages tab with filtering
+                  _buildConversationList(
+                    allConversations,
+                    isMainTab: true,
+                  ), 
+                  // Spam tab without filtering
                   _buildConversationList(
                     allConversations.where((c) => c.messages.any((m) => m.isSpam)).toList(),
+                    isMainTab: false,
                   ),
                 ],
               ),
@@ -166,22 +172,22 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
     );
   }
 
-  Widget _buildConversationList(List<model.Conversation> conversationList) {
+  Widget _buildConversationList(List<model.Conversation> conversationList, {required bool isMainTab}) {
     final filterProvider = Provider.of<FilterProvider>(context);
     final conversationProvider = Provider.of<ConversationProvider>(context);
 
-    // Filter out both archived and deleted conversations
+    // Filter out archived and deleted conversations first
     final filteredConversations = conversationList.where((conv) => 
       !conversationProvider.archivedConversations.any((archived) => archived.id == conv.id) &&
       !conversationProvider.deletedConversations.any((deleted) => deleted.id == conv.id)
     ).toList();
 
-    // Apply spam filtering
-    final filteredList = (filterProvider.selectedTab == 'All Messages' && filterProvider.filterHamMessages)
+    // Only apply ham filtering if we're in the main tab (All Messages)
+    final filteredList = (isMainTab && filterProvider.filterHamMessages)
         ? filteredConversations.where((conv) => 
-            !conv.messages.any((message) => message.isSpam)
+            !conv.messages.any((message) => message.isSpam) // Keep only ham messages
           ).toList()
-        : filteredConversations;
+        : filteredConversations; // Show all messages for other tabs or when filter is off
 
     return ListView.builder(
       itemCount: filteredList.length,
