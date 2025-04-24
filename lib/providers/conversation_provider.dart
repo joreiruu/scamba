@@ -73,14 +73,24 @@ class ConversationProvider with ChangeNotifier {
     // Clear existing conversations to prevent duplication
     _conversations.clear();
     _archivedConversations.clear();
+    _deletedConversations.clear();
 
-    // Load saved states
+    // Load saved states first
     await _loadArchivedIds();
     await _loadDeletedIds();
     await _loadReadStatus();
 
-    // Load stored classifications for each message
+    // Process each conversation based on its state
     for (var conversation in newConversations) {
+      if (_persistentDeletedIds.contains(conversation.id)) {
+        _deletedConversations.add(conversation);
+      } else if (_persistentArchivedIds.contains(conversation.id)) {
+        _archivedConversations.add(conversation);
+      } else {
+        _conversations.add(conversation);
+      }
+
+      // Load stored classifications for each message
       for (var message in conversation.messages) {
         final storedClassification = await _db.getClassification(message.id.toString());
         if (storedClassification != null) {
@@ -91,12 +101,10 @@ class ConversationProvider with ChangeNotifier {
       }
     }
 
-    _preserveReadStatus(newConversations);
-    _conversations = newConversations;
-
+    notifyListeners();
+    
     // Only classify unclassified messages
     classifyMessagesInBackground(newConversations);
-    notifyListeners();
   }
 
   void _preserveReadStatus(List<Conversation> conversations) {
@@ -199,15 +207,21 @@ class ConversationProvider with ChangeNotifier {
     }
   }
 
-  // Archive a conversation
   void archiveConversation(Conversation conversation) {
-    print('Archiving conversation: ${conversation.id}'); // Debug log
+    print('Archiving conversation: ${conversation.id}');
     if (!_persistentArchivedIds.contains(conversation.id)) {
-      _persistentArchivedIds.add(conversation.id);
+      // First remove from main conversations to prevent duplication
       _conversations.removeWhere((conv) => conv.id == conversation.id);
-      _archivedConversations.add(conversation);
-      _saveArchivedIds();
-      notifyListeners();
+      
+      // Only add to archived if not already present
+      if (!_archivedConversations.any((conv) => conv.id == conversation.id)) {
+        _persistentArchivedIds.add(conversation.id);
+        _archivedConversations.add(conversation);
+      }
+      
+      _saveArchivedIds().then((_) {
+        notifyListeners();
+      });
     }
   }
 
@@ -223,47 +237,50 @@ class ConversationProvider with ChangeNotifier {
 
   // Restore a deleted conversation
   void restoreDeletedConversation(Conversation conversation) {
-    _deletedConversations.removeWhere((conv) => conv.id == conversation.id);
-    _persistentDeletedIds.remove(conversation.id);
-    
-    // Insert the conversation in the correct chronological position
-    int insertIndex = _conversations.indexWhere(
-        (conv) => conv.lastMessageTime.isBefore(conversation.lastMessageTime)
-    );
-    
-    if (insertIndex == -1) {
-        // If no earlier message found, add to end
-        _conversations.add(conversation);
-    } else {
-        // Insert at the correct position
-        _conversations.insert(insertIndex, conversation);
-    }
-    
-    _saveDeletedIds();
-    notifyListeners();
-  }
+    if (_persistentDeletedIds.contains(conversation.id)) {
+      _deletedConversations.removeWhere((conv) => conv.id == conversation.id);
+      _persistentDeletedIds.remove(conversation.id);
 
-  // Restore an archived conversation
-  void restoreArchivedConversation(Conversation conversation) {
-    if (_persistentArchivedIds.contains(conversation.id)) {
-        _persistentArchivedIds.remove(conversation.id);
-        _archivedConversations.removeWhere((conv) => conv.id == conversation.id);
-        
+      // Check if conversation already exists to prevent duplicates
+      if (!_conversations.any((conv) => conv.id == conversation.id)) {
         // Insert the conversation in the correct chronological position
-        int insertIndex = _conversations.indexWhere(
-            (conv) => conv.lastMessageTime.isBefore(conversation.lastMessageTime)
+        final insertIndex = _conversations.indexWhere(
+          (conv) => conv.lastMessageTime.compareTo(conversation.lastMessageTime) < 0
         );
         
         if (insertIndex == -1) {
-            // If no earlier message found, add to end
-            _conversations.add(conversation);
+          _conversations.insert(0, conversation); // Add to beginning if newest
         } else {
-            // Insert at the correct position
-            _conversations.insert(insertIndex, conversation);
+          _conversations.insert(insertIndex, conversation);
         }
+      }
+      
+      _saveDeletedIds();
+      notifyListeners();
+    }
+  }
+
+  void restoreArchivedConversation(Conversation conversation) {
+    if (_persistentArchivedIds.contains(conversation.id)) {
+      _persistentArchivedIds.remove(conversation.id);
+      _archivedConversations.removeWhere((conv) => conv.id == conversation.id);
+      
+      // Check if conversation already exists to prevent duplicates
+      if (!_conversations.any((conv) => conv.id == conversation.id)) {
+        // Insert the conversation in the correct chronological position
+        final insertIndex = _conversations.indexWhere(
+          (conv) => conv.lastMessageTime.compareTo(conversation.lastMessageTime) < 0
+        );
         
-        _saveArchivedIds();
-        notifyListeners();
+        if (insertIndex == -1) {
+          _conversations.insert(0, conversation); // Add to beginning if newest
+        } else {
+          _conversations.insert(insertIndex, conversation);
+        }
+      }
+      
+      _saveArchivedIds();
+      notifyListeners();
     }
   }
 
@@ -276,15 +293,21 @@ class ConversationProvider with ChangeNotifier {
 
   // Undo Archive
   void unarchiveConversation(Conversation conversation) {
+    // Remove old references to prevent duplicates
     _archivedConversations.removeWhere((conv) => conv.id == conversation.id);
-    _conversations.add(conversation);
-    notifyListeners();
-  }
-
-  // Undo Delete
-  void restoreConversation(Conversation conversation) {
-    _deletedConversations.removeWhere((conv) => conv.id == conversation.id);
-    _conversations.add(conversation);
+    _conversations.removeWhere((conv) => conv.id == conversation.id);
+    
+    // Insert the conversation in the correct chronological position
+    final insertIndex = _conversations.indexWhere(
+      (conv) => conv.lastMessageTime.compareTo(conversation.lastMessageTime) < 0
+    );
+    
+    if (insertIndex == -1) {
+      _conversations.insert(0, conversation); // Add to beginning if newest
+    } else {
+      _conversations.insert(insertIndex, conversation);
+    }
+    
     notifyListeners();
   }
 
