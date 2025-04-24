@@ -32,24 +32,37 @@ class ConversationProvider with ChangeNotifier {
 
   // Add flags to track initial load
   bool _isInitialized = false;
+  bool _isInitializing = false;
   final Set<int> _persistentArchivedIds = {};
   final Set<int> _persistentDeletedIds = {};
   bool _isClassifying = false;
 
-  // Remove auto-refresh timer from constructor
   ConversationProvider() {
-    // Only load saved states once
-    Future(() async {
-      await _loadArchivedIds();
-      await _loadDeletedIds();
-      await _loadReadStatus();
-      notifyListeners();
-    });
-
-    // Listen to SMS updates
-    _subscription = _smsService.conversationsStream.listen((conversations) {
-      refreshConversations();
-    });
+    // Only initialize once
+    if (!_isInitialized && !_isInitializing) {
+      _isInitializing = true;
+      
+      // Load saved states first
+      Future(() async {
+        await _loadArchivedIds();
+        await _loadDeletedIds();
+        await _loadReadStatus();
+        
+        // Listen to SMS updates after loading states
+        _subscription = _smsService.conversationsStream.listen((conversations) {
+          if (!_isInitialized) {
+            loadConversations(conversations);
+            _isInitialized = true;
+          } else {
+            // For subsequent updates, just refresh the conversations
+            refreshConversations();
+          }
+        });
+        
+        _isInitializing = false;
+        _smsService.startMessageListener();
+      });
+    }
   }
 
   // Getters
@@ -70,6 +83,8 @@ class ConversationProvider with ChangeNotifier {
 
   // Initialize conversations
   Future<void> loadConversations(List<Conversation> newConversations) async {
+    if (_isInitialized) return; // Prevent reloading if already initialized
+    
     // Clear existing conversations to prevent duplication
     _conversations.clear();
     _archivedConversations.clear();
@@ -508,13 +523,9 @@ class ConversationProvider with ChangeNotifier {
     return favoriteMessages;
   }
 
-  void refreshConversations() async {
-    if (!_isInitialized) {
-      await _loadArchivedIds();
-      await _loadDeletedIds();
-      await _loadReadStatus();
-      _isInitialized = true;
-    }
+  Future<void> refreshConversations() async {
+    print('Manual refresh requested'); // Debug log
+    await _smsService.refreshConversations();
   }
 
   Future<void> _saveArchivedIds() async {
