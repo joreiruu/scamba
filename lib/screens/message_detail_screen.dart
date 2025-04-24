@@ -40,6 +40,26 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
     }
   }
 
+  String _formatMessageTime(DateTime timestamp) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDate = DateTime(timestamp.year, timestamp.month, timestamp.day);
+
+    if (messageDate == today) {
+      // Today, show only time
+      return DateFormat('h:mm a').format(timestamp);
+    } else if (messageDate == today.subtract(const Duration(days: 1))) {
+      // Yesterday
+      return 'Yesterday ${DateFormat('h:mm a').format(timestamp)}';
+    } else if (now.difference(timestamp).inDays < 7) {
+      // Within last week
+      return '${DateFormat('EEEE').format(timestamp)} ${DateFormat('h:mm a').format(timestamp)}';
+    } else {
+      // Older messages
+      return DateFormat('MMM d, y h:mm a').format(timestamp);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -326,7 +346,7 @@ void _toggleFavoriteAndExitSelection(Message message) {
                             clipBehavior: Clip.none,
                             children: [
                               Container(
-                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                margin: const EdgeInsets.only(bottom: 16), // Add margin for timestamp
                                 constraints: BoxConstraints(
                                   maxWidth: MediaQuery.of(context).size.width * 0.8,
                                 ),
@@ -345,33 +365,48 @@ void _toggleFavoriteAndExitSelection(Message message) {
                                   right: 12.0,
                                   bottom: (message.isFavorite && !isSelectionMode) ? 22.0 : 12.0,
                                 ),      
-                                child: SelectableLinkify(
-                                  text: message.content,
-                                  style: TextStyle(
-                                    color: message.isSpam ? spamTextColor : hamTextColor,
-                                    fontSize: 16,
-                                  ),
-                                  onOpen: (link) async {
-                                    try {
-                                      await launchUrl(Uri.parse(link.url));
-                                    } catch (e) {
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('Could not open link: ${link.url}'),
-                                            backgroundColor: const Color(0xFF85BBD9),
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  },
-                                  linkStyle: TextStyle(
-                                    color: isDarkMode ? Colors.lightBlue : Colors.blue,
-                                    decoration: TextDecoration.underline,
-                                  ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SelectableLinkify(
+                                      text: message.content,
+                                      style: TextStyle(
+                                        color: message.isSpam ? spamTextColor : hamTextColor,
+                                        fontSize: 16,
+                                      ),
+                                      onOpen: (link) async {
+                                        try {
+                                          await launchUrl(Uri.parse(link.url));
+                                        } catch (e) {
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('Could not open link: ${link.url}'),
+                                                backgroundColor: const Color(0xFF85BBD9),
+                                              ),
+                                            );
+                                          }
+                                        }
+                                      },
+                                      linkStyle: TextStyle(
+                                        color: isDarkMode ? Colors.lightBlue : Colors.blue,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        _formatMessageTime(message.timestamp),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              
                               if (message.isFavorite && !isSelectionMode)
                                 Positioned(
                                   right: 8,
