@@ -55,24 +55,35 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
   }
 
   void _scrollListener() {
-    if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent) {
+    if (!_isLoadingMore && 
+        _scrollController.position.pixels > 0 &&
+        _scrollController.position.pixels >= 
+        _scrollController.position.maxScrollExtent * 0.9) {
       _loadMoreMessages();
     }
   }
 
   Future<void> _loadMoreMessages() async {
-    if (!_isLoadingMore) {
-      setState(() => _isLoadingMore = true);
-      
-      try {
-        final provider = Provider.of<ConversationProvider>(context, listen: false);
-        final loadedConversations = await _smsService.getConversations(loadMore: true);
-        if (loadedConversations != null) {
-          provider.loadConversations(loadedConversations);
+    if (_isLoadingMore) return;
+    setState(() => _isLoadingMore = true);
+    
+    try {
+      final provider = Provider.of<ConversationProvider>(context, listen: false);
+      final loadedConversations = await _smsService.getConversations(loadMore: true);
+      if (loadedConversations != null && loadedConversations.isNotEmpty) {
+        // Add new conversations without refreshing existing ones
+        for (var newConv in loadedConversations) {
+          if (!provider.conversations.any((c) => c.id == newConv.id)) {
+            provider.conversations.add(newConv);
+          }
         }
-      } catch (e) {
-        // Handle error
-      } finally {
+        // Only notify if new conversations were added
+        provider.notifyListeners();
+      }
+    } catch (e) {
+      print('Error loading more messages: $e');
+    } finally {
+      if (mounted) {
         setState(() => _isLoadingMore = false);
       }
     }
@@ -211,7 +222,9 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
         : filteredConversations; // Show all messages for other tabs or when filter is off
 
     return ListView.builder(
+      key: PageStorageKey(isMainTab ? 'main_tab' : 'spam_tab'), // Preserve scroll position
       controller: _scrollController,
+      physics: const AlwaysScrollableScrollPhysics(),
       itemCount: filteredList.length + 1,  // Add 1 for loading indicator
       itemBuilder: (context, index) {
         if (index == filteredList.length) {
