@@ -1,12 +1,21 @@
 import 'package:http/http.dart' as http;
+import 'package:crypto/crypto.dart';
 import 'dart:convert';
 import 'dart:math' show min;
 import 'cache_service.dart';
+import 'database_helper.dart';
+import '../models/message_model.dart'; 
 
 class SpamClassifierService {
   final String apiUrl = 'https://scamba.serveo.net/classify_batch';
   static const double SPAM_THRESHOLD = 50.0;
   final CacheService _cacheService = CacheService();
+  final DatabaseHelper _db = DatabaseHelper();
+
+  String _generateMessageHash(String content, String sender) {
+    final data = '$sender:$content';
+    return sha256.convert(utf8.encode(data)).toString();
+  }
 
   Future<List<Map<String, dynamic>>> classifyBatch(List<String> messages) async {
     print('\n📊 BATCH CLASSIFICATION');
@@ -91,20 +100,27 @@ class SpamClassifierService {
     }
   }
 
-  Future<Map<String, dynamic>> classifyMessage(String message) async {
-    print('\n🔄 Processing single message: "${message.substring(0, min(30, message.length))}..."');
-    
-    if (message.isEmpty) {
-      print('⚠️ Empty message received');
-      return {
-        'predicted_class': 0,
-        'confidence': 0.0,
-        'error': 'Empty message'
-      };
-    }
+  Future<Map<String, dynamic>> classifyMessage(Message message) async {
+    try {
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'texts': [message.content]}),
+      ).timeout(const Duration(seconds: 10));
 
-    final results = await classifyBatch([message]);
-    print('📤 Classification complete\n');
-    return results.first;
+      if (response.statusCode == 200) {
+        final List<dynamic> results = jsonDecode(response.body);
+        if (results.isNotEmpty) {
+          return {
+            'predicted_class': results[0]['predicted_class'],
+            'confidence': results[0]['confidence'],
+          };
+        }
+      }
+      return {'error': 'Classification failed'};
+    } catch (e) {
+      print('⚠️ Classification error: $e');
+      return {'error': e.toString()};
+    }
   }
 }

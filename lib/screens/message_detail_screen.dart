@@ -246,6 +246,20 @@ void _toggleFavoriteAndExitSelection(Message message) {
   });
 }
 
+Color _getMessageColor(Message message, bool isDarkMode, bool isSelected) {
+  if (isSelected) {
+    return Color.fromRGBO(33, 150, 243, 0.3);
+  }
+  
+  if (!message.isClassified) {
+    return isDarkMode ? Colors.grey[800]! : Colors.grey[300]!;
+  }
+  
+  return message.isSpam 
+      ? (isDarkMode ? Colors.red[900]! : Colors.red[100]!)
+      : (isDarkMode ? Colors.blueGrey[800]! : Colors.blue[100]!);
+}
+
    @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -346,32 +360,25 @@ void _toggleFavoriteAndExitSelection(Message message) {
                             clipBehavior: Clip.none,
                             children: [
                               Container(
-                                margin: const EdgeInsets.only(bottom: 16), // Add margin for timestamp
+                                margin: const EdgeInsets.only(bottom: 16),
                                 constraints: BoxConstraints(
                                   maxWidth: MediaQuery.of(context).size.width * 0.8,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: isMessageSelected 
-                                      ? Color.fromRGBO(33, 150, 243, 0.3)
-                                      : (message.isSpam ? spamBgColor : hamBgColor),
+                                  color: _getMessageColor(message, isDarkMode, isMessageSelected),
                                   borderRadius: BorderRadius.circular(12),
                                   border: isMessageSelected 
                                       ? Border.all(color: Colors.blue, width: 2) 
                                       : null,
                                 ),
-                                padding: EdgeInsets.only(
-                                  left: 12.0, 
-                                  top: 12.0, 
-                                  right: 12.0,
-                                  bottom: (message.isFavorite && !isSelectionMode) ? 22.0 : 12.0,
-                                ),      
+                                padding: EdgeInsets.all(12),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     SelectableLinkify(
                                       text: message.content,
                                       style: TextStyle(
-                                        color: message.isSpam ? spamTextColor : hamTextColor,
+                                        color: isDarkMode ? Colors.white : Colors.black87,
                                         fontSize: 16,
                                       ),
                                       onOpen: (link) async {
@@ -394,6 +401,7 @@ void _toggleFavoriteAndExitSelection(Message message) {
                                       ),
                                     ),
                                     const SizedBox(height: 4),
+                                    
                                     Padding(
                                       padding: const EdgeInsets.only(top: 4),
                                       child: Text(

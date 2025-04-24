@@ -30,7 +30,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
       // Classify each message
       for (var conversation in conversations) {
         for (var message in conversation.messages) {
-          final result = await _classifier.classifyMessage(message.content);
+          final result = await _classifier.classifyMessage(message); // Pass the message object instead of message.content
           
           if (!result.containsKey('error')) {
             final isSpam = result['predicted_class'] == 1;
@@ -40,6 +40,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
             message = message.copyWith(
               isSpam: isSpam,
               spamConfidence: confidence,
+              isClassified: true, // Mark as classified
             );
           }
         }

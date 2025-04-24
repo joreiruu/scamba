@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/conversation_model.dart';
 import '../models/message_model.dart';
 import '../services/sms_service.dart';
+import '../services/spam_classifier_service.dart';
+import '../services/database_helper.dart';
 
 class ConversationProvider with ChangeNotifier {
   List<Conversation> _conversations = [];
@@ -14,6 +16,8 @@ class ConversationProvider with ChangeNotifier {
   final Map<String, DateTime> _deletedAtMap = {};
   final SmsService _smsService = SmsService();
   final Map<int, bool> _messageReadStatus = {};
+  final SpamClassifierService _classifier = SpamClassifierService();
+  final DatabaseHelper _db = DatabaseHelper();
   StreamSubscription? _subscription;
 
   static const refreshInterval = Duration(seconds: 5);
@@ -28,20 +32,16 @@ class ConversationProvider with ChangeNotifier {
   bool _isInitialized = false;
   final Set<int> _persistentArchivedIds = {};
   final Set<int> _persistentDeletedIds = {};
+  bool _isClassifying = false;
 
+  // Remove auto-refresh timer from constructor
   ConversationProvider() {
-    // Load saved states immediately
+    // Only load saved states once
     Future(() async {
       await _loadArchivedIds();
       await _loadDeletedIds();
       await _loadReadStatus();
-      await refreshConversations();
       notifyListeners();
-    });
-
-    // Set up auto-refresh
-    _autoRefreshTimer = Timer.periodic(refreshInterval, (_) async {
-      await refreshConversations();
     });
 
     // Listen to SMS updates
@@ -67,8 +67,23 @@ class ConversationProvider with ChangeNotifier {
   }
 
   // Initialize conversations
-  void loadConversations(List<Conversation> newConversations) {
+  Future<void> loadConversations(List<Conversation> newConversations) async {
     _preserveReadStatus(newConversations);
+
+    // Load stored classifications
+    for (var conversation in newConversations) {
+      for (var message in conversation.messages) {
+        final stored = await _db.getStoredClassification(message.id.toString());
+        if (stored != null) {
+          message.isSpam = stored['is_spam'] == 1;
+          message.spamConfidence = stored['confidence'];
+          message.isClassified = true;
+        }
+      }
+    }
+
+    // Only classify messages that haven't been classified before
+    classifyMessagesInBackground(newConversations);
     notifyListeners();
   }
 
@@ -98,6 +113,38 @@ class ConversationProvider with ChangeNotifier {
           msg.isRead = _messageReadStatus[msg.id]!;
         }
       }
+    }
+  }
+
+  Future<void> classifyMessagesInBackground(List<Conversation> conversations) async {
+    if (_isClassifying) return;
+    _isClassifying = true;
+
+    try {
+      for (var conversation in conversations) {
+        for (var message in conversation.messages) {
+          if (!message.isClassified) {
+            final result = await _classifier.classifyMessage(message);
+            
+            if (!result.containsKey('error')) {
+              message.isSpam = result['predicted_class'] == 1;
+              message.spamConfidence = result['confidence'];
+              message.isClassified = true;
+              
+              // Store classification result
+              await _db.storeClassification(
+                message.id.toString(),
+                message.isSpam,
+                message.spamConfidence,
+              );
+              
+              notifyListeners();
+            }
+          }
+        }
+      }
+    } finally {
+      _isClassifying = false;
     }
   }
 
@@ -412,6 +459,7 @@ class ConversationProvider with ChangeNotifier {
         _conversations = newConversations;
         _archivedConversations = newArchivedConversations;
         _deletedConversations = newDeletedConversations;
+        classifyMessagesInBackground(_conversations);
         notifyListeners();
       }
     } catch (e) {

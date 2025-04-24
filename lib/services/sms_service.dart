@@ -2,94 +2,67 @@ import 'package:flutter_sms_inbox/flutter_sms_inbox.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/conversation_model.dart';
 import '../models/message_model.dart';
-import 'spam_classifier_service.dart';
 import 'dart:async';
 
 class SmsService {
+  static const int BATCH_SIZE = 100;
   final SmsQuery _query = SmsQuery();
-  final SpamClassifierService _classifier = SpamClassifierService();
-
-  // Add stream controller
   final _conversationsController = StreamController<List<Conversation>>.broadcast();
+  final Map<String, List<Message>> _messageCache = {};
+  int _lastLoadedId = 0;
+  bool _hasMoreMessages = true;
+  bool _isInitialized = false;
   
-  // Add stream getter
   Stream<List<Conversation>> get conversationsStream => _conversationsController.stream;
 
-  Future<List<Conversation>> getConversations() async {
-    var permission = await Permission.sms.status;
-    if (!permission.isGranted) {
-      permission = await Permission.sms.request();
+  Future<List<Conversation>> getConversations({bool loadMore = false}) async {
+    // Check permission only on first load
+    if (!_isInitialized) {
+      var permission = await Permission.sms.status;
       if (!permission.isGranted) {
-        return [];
+        permission = await Permission.sms.request();
+        if (!permission.isGranted) return [];
       }
+      _isInitialized = true;
+    }
+
+    // Return cached messages if not loading more
+    if (!loadMore && _messageCache.isNotEmpty) {
+      return _groupIntoConversations();
     }
 
     try {
-      final messages = await _query.getAllSms;
-      final Map<String, List<SmsMessage>> groupedMessages = {};
-      
-      // Group messages by sender
-      for (var sms in messages) {
-        final sender = sms.sender ?? 'Unknown';
-        groupedMessages.putIfAbsent(sender, () => []);
-        groupedMessages[sender]!.add(sms);
+      final messages = await _query.querySms(
+        start: _lastLoadedId,
+        count: BATCH_SIZE,
+      );
+
+      if (messages.isEmpty || messages.length < BATCH_SIZE) {
+        _hasMoreMessages = false;
       }
 
-      List<Conversation> conversations = [];
-      int processedCount = 0;
-      
-      for (var entry in groupedMessages.entries) {
-        List<Message> processedMessages = entry.value.map((sms) => Message(
+      // Process new messages
+      for (var sms in messages) {
+        final sender = sms.sender ?? 'Unknown';
+        final message = Message(
           id: sms.id?.hashCode ?? 0,
-          sender: sms.sender ?? 'Unknown',
+          sender: sender,
           content: sms.body ?? '',
           timestamp: sms.date ?? DateTime.now(),
           isRead: sms.read ?? false,
-          isClassified: false,  // Initially mark as unclassified
-        )).toList();
-
-        conversations.add(Conversation(
-          id: entry.key.hashCode,
-          sender: entry.key,
-          messages: processedMessages,
-        ));
-
-        // Only process first 10 conversations
-        if (processedCount < 10) {
-          // Classify messages for this conversation
-          List<String> messageBodies = entry.value
-              .map((sms) => sms.body ?? '')
-              .where((body) => body.isNotEmpty)
-              .toList();
-              
-          final classifications = await _classifier.classifyBatch(messageBodies);
-          
-          for (var i = 0; i < processedMessages.length; i++) {
-            var classification = classifications[i];
-            processedMessages[i] = processedMessages[i].copyWith(
-              isSpam: classification['predicted_class'] == 1,
-              spamConfidence: classification['confidence'] ?? 0.0,
-              isClassified: true,
-            );
-          }
-        }
+        );
         
-        processedCount++;
+        _messageCache.putIfAbsent(sender, () => []).add(message);
+        if (sms.id != null) _lastLoadedId = sms.id!;
       }
 
-      // Sort conversations by most recent message
-      conversations.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
-      
-      // Add conversations to stream
-      _conversationsController.add(conversations);
-      return conversations;
+      return _groupIntoConversations();
     } catch (e) {
-      print('Error loading SMS messages: $e');
-      return [];
+      print('Error loading messages: $e');
+      return _groupIntoConversations(); // Return cached messages on error
     }
   }
 
-  // Add refreshConversations method
   Future<void> refreshConversations() async {
     try {
       final conversations = await getConversations();
@@ -101,8 +74,22 @@ class SmsService {
     }
   }
 
-  // Add dispose method
   void dispose() {
     _conversationsController.close();
+  }
+
+  List<Conversation> _groupIntoConversations() {
+    final conversations = _messageCache.entries.map((entry) => 
+      Conversation(
+        id: entry.key.hashCode,
+        sender: entry.key,
+        messages: entry.value,
+      )
+    ).toList();
+
+    // Sort by most recent message
+    conversations.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+    
+    return conversations;
   }
 }

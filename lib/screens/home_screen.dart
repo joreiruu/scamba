@@ -24,24 +24,21 @@ class HomeScreen extends StatefulWidget {
 class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final SmsService _smsService = SmsService();
+  final ScrollController _scrollController = ScrollController();
   bool selectionMode = false;
   Set<int> selectedMessages = {};
   bool _isLoading = false;
-  Timer? _refreshTimer;
+  bool _isLoadingMore = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _loadMessages();
-    
-    // Increase refresh interval to reduce unnecessary updates
-    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      _loadMessages();
-    });
+    _loadInitialMessages(); // Only load messages once
+    _scrollController.addListener(_scrollListener);
   }
 
-  Future<void> _loadMessages() async {
+  Future<void> _loadInitialMessages() async {
     try {
       final provider = Provider.of<ConversationProvider>(context, listen: false);
       final loadedConversations = await _smsService.getConversations();
@@ -57,9 +54,33 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
     }
   }
 
+  void _scrollListener() {
+    if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent) {
+      _loadMoreMessages();
+    }
+  }
+
+  Future<void> _loadMoreMessages() async {
+    if (!_isLoadingMore) {
+      setState(() => _isLoadingMore = true);
+      
+      try {
+        final provider = Provider.of<ConversationProvider>(context, listen: false);
+        final loadedConversations = await _smsService.getConversations(loadMore: true);
+        if (loadedConversations != null) {
+          provider.loadConversations(loadedConversations);
+        }
+      } catch (e) {
+        // Handle error
+      } finally {
+        setState(() => _isLoadingMore = false);
+      }
+    }
+  }
+
   @override
   void dispose() {
-    _refreshTimer?.cancel(); // Cancel the timer when disposing
+    _scrollController.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -190,8 +211,19 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
         : filteredConversations; // Show all messages for other tabs or when filter is off
 
     return ListView.builder(
-      itemCount: filteredList.length,
+      controller: _scrollController,
+      itemCount: filteredList.length + 1,  // Add 1 for loading indicator
       itemBuilder: (context, index) {
+        if (index == filteredList.length) {
+          // Show loading indicator at the bottom
+          return _isLoadingMore
+              ? const Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              : const SizedBox();
+        }
+
         final conversation = filteredList[index];
         final lastMessage = conversation.messages.isNotEmpty
             ? conversation.messages.first  // Changed from last to first
