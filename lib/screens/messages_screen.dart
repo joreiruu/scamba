@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/sms_service.dart';
 import '../services/spam_classifier_service.dart';
 import '../models/conversation_model.dart';
+import '../providers/conversation_provider.dart';
 
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({Key? key}) : super(key: key);
@@ -19,6 +21,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+        Provider.of<ConversationProvider>(context, listen: false).forceRefresh();
+    });
     _loadMessages();
   }
 

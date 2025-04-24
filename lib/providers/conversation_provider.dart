@@ -225,20 +225,45 @@ class ConversationProvider with ChangeNotifier {
   void restoreDeletedConversation(Conversation conversation) {
     _deletedConversations.removeWhere((conv) => conv.id == conversation.id);
     _persistentDeletedIds.remove(conversation.id);
-    _conversations.add(conversation);
+    
+    // Insert the conversation in the correct chronological position
+    int insertIndex = _conversations.indexWhere(
+        (conv) => conv.lastMessageTime.isBefore(conversation.lastMessageTime)
+    );
+    
+    if (insertIndex == -1) {
+        // If no earlier message found, add to end
+        _conversations.add(conversation);
+    } else {
+        // Insert at the correct position
+        _conversations.insert(insertIndex, conversation);
+    }
+    
     _saveDeletedIds();
     notifyListeners();
   }
 
   // Restore an archived conversation
   void restoreArchivedConversation(Conversation conversation) {
-    print('Restoring conversation: ${conversation.id}'); // Debug log
     if (_persistentArchivedIds.contains(conversation.id)) {
-      _persistentArchivedIds.remove(conversation.id);
-      _archivedConversations.removeWhere((conv) => conv.id == conversation.id);
-      _conversations.add(conversation);
-      _saveArchivedIds();
-      notifyListeners();
+        _persistentArchivedIds.remove(conversation.id);
+        _archivedConversations.removeWhere((conv) => conv.id == conversation.id);
+        
+        // Insert the conversation in the correct chronological position
+        int insertIndex = _conversations.indexWhere(
+            (conv) => conv.lastMessageTime.isBefore(conversation.lastMessageTime)
+        );
+        
+        if (insertIndex == -1) {
+            // If no earlier message found, add to end
+            _conversations.add(conversation);
+        } else {
+            // Insert at the correct position
+            _conversations.insert(insertIndex, conversation);
+        }
+        
+        _saveArchivedIds();
+        notifyListeners();
     }
   }
 
@@ -510,6 +535,8 @@ class ConversationProvider with ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final String? deletedIdsJson = prefs.getString(_deletedIdsKey);
+      print('Loaded read status: $deletedIdsJson'); // Debug log
+
       if (deletedIdsJson != null) {
         final List<dynamic> deletedIds = jsonDecode(deletedIdsJson);
         _persistentDeletedIds.clear();

@@ -528,6 +528,8 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
             for (final conversation in unarchived) {
               provider.restoreArchivedConversation(conversation);
             }
+            // Force refresh after restoration
+            provider.forceRefresh();
           },
           onDelete: (deleted) {
             final provider = Provider.of<ConversationProvider>(context, listen: false);
@@ -537,7 +539,11 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
           },
         ),
       ),
-    );
+    ).then((_) {
+      // Refresh when returning to home screen
+      setState(() {});
+      Provider.of<ConversationProvider>(context, listen: false).forceRefresh();
+    });
   }
 
   void openDeletedScreen() {
@@ -551,9 +557,15 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
             for (final conversation in restored) {
               provider.restoreDeletedConversation(conversation);
             }
+            // Force refresh after restoration
+            provider.forceRefresh();
           },
         ),
       ),
-    );
+    ).then((_) {
+      // Refresh when returning to home screen
+      setState(() {});
+      Provider.of<ConversationProvider>(context, listen: false).forceRefresh();
+    });
   }
 }
