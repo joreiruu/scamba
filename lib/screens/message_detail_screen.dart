@@ -304,10 +304,11 @@ void _toggleFavoriteAndExitSelection(Message message) {
           ),
           Expanded(
             child: ListView.builder(
+              reverse: true, // Add this to make the list start from bottom
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: widget.conversation.orderedMessages.length,
+              itemCount: widget.conversation.messages.length,
               itemBuilder: (context, index) {
-                final message = widget.conversation.orderedMessages[index];
+                final message = widget.conversation.messages[index];
                 final bool isSentByUser = message.sender == "You";
                 final bool isMessageSelected = selectedMessages.contains(message);
 

@@ -9,14 +9,11 @@ class Conversation {
     required this.id,
     required this.sender,
     required List<Message> messages,
-  }) : messages = messages..sort((a, b) => a.timestamp.compareTo(b.timestamp)); // Keep oldest to newest for processing
+  }) : messages = messages..sort((a, b) => b.timestamp.compareTo(a.timestamp)); // Sort newest to oldest
 
-  Message get latestMessage => messages.last;
-  DateTime get lastMessageTime => messages.last.timestamp;
+  Message get latestMessage => messages.first; // Changed from last to first
+  DateTime get lastMessageTime => messages.first.timestamp; // Changed from last to first
   int get unreadCount => messages.where((m) => !m.isRead).length;
-
-  // This getter maintains UI design - messages display from bottom to top
-  List<Message> get orderedMessages => messages.reversed.toList();
 
   Conversation copyWith({
     int? id,

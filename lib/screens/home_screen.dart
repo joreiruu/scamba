@@ -194,7 +194,7 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
       itemBuilder: (context, index) {
         final conversation = filteredList[index];
         final lastMessage = conversation.messages.isNotEmpty
-            ? conversation.messages.last
+            ? conversation.messages.first  // Changed from last to first
             : null;
         
         final isSelected = selectedMessages.contains(conversation.id);
@@ -221,12 +221,12 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
                   CircleAvatar(
                     backgroundColor: isSelected
                         ? Colors.blue
-                        : conversation.messages.isNotEmpty && conversation.messages.last.isSpam
+                        : conversation.messages.isNotEmpty && conversation.messages.first.isSpam
                             ? Colors.transparent
                             : const Color(0xFF85BBD9),
                     child: isSelected
                         ? const Icon(Icons.check, color: Colors.white)
-                        : conversation.messages.isNotEmpty && conversation.messages.last.isSpam
+                        : conversation.messages.isNotEmpty && conversation.messages.first.isSpam
                             ? ClipOval(
                                 child: Image.asset(
                                   'assets/warning_icon.png',
@@ -297,7 +297,7 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
                 if (selectionMode) {
                   _toggleSelection(conversation.id);
                 } else {
-                  _markMessageAsRead(conversation.messages.last, conversation.messages);
+                  _markMessageAsRead(conversation.messages.first, conversation.messages);
                   Navigator.push(
                     context,
                     MaterialPageRoute(
