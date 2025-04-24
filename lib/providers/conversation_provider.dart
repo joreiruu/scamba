@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/conversation_model.dart';
 import '../models/message_model.dart';
@@ -73,10 +74,27 @@ class ConversationProvider with ChangeNotifier {
     _conversations.clear();
     _archivedConversations.clear();
 
+    // Load saved states
+    await _loadArchivedIds();
+    await _loadDeletedIds();
+    await _loadReadStatus();
+
+    // Load stored classifications for each message
+    for (var conversation in newConversations) {
+      for (var message in conversation.messages) {
+        final storedClassification = await _db.getClassification(message.id.toString());
+        if (storedClassification != null) {
+          message.isSpam = storedClassification['is_spam'] == 1;
+          message.spamConfidence = storedClassification['confidence'];
+          message.isClassified = true;
+        }
+      }
+    }
+
     _preserveReadStatus(newConversations);
     _conversations = newConversations;
 
-    // Start classification in background
+    // Only classify unclassified messages
     classifyMessagesInBackground(newConversations);
     notifyListeners();
   }
@@ -115,27 +133,54 @@ class ConversationProvider with ChangeNotifier {
     _isClassifying = true;
 
     try {
-      for (var conversation in conversations) {
-        for (var message in conversation.messages) {
-          // Skip if already processed
-          if (_processedMessageIds.contains(message.id.toString())) {
-            continue;
-          }
+      // Sort conversations by most recent message first
+      final sortedConversations = List<Conversation>.from(conversations)
+        ..sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
 
-          if (!message.isClassified) {
-            final result = await _classifier.classifyMessage(message);
+      for (var conversation in sortedConversations) {
+        print('📱 Processing conversation from: ${conversation.sender}');
+        
+        // Get unclassified messages in this conversation, newest first
+        final unclassifiedMessages = conversation.messages
+            .where((msg) => !msg.isClassified)
+            .toList()
+            ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-            if (!result.containsKey('error')) {
-              message.isSpam = result['predicted_class'] == 1;
-              message.spamConfidence = result['confidence'];
-              message.isClassified = true;
-              notifyListeners(); // Update UI after each classification
-            }
+        if (unclassifiedMessages.isEmpty) {
+          print('✓ All messages from ${conversation.sender} are already classified');
+          continue;
+        }
+
+        print('🔄 Classifying ${unclassifiedMessages.length} messages from ${conversation.sender}');
+        
+        // Process all messages in this conversation before moving to next
+        for (var message in unclassifiedMessages) {
+          print('  └─ Classifying message: "${message.content.substring(0, min(30, message.content.length))}..."');
+          
+          final result = await _classifier.classifyMessage(message);
+          
+          if (!result.containsKey('error')) {
+            message.isSpam = result['predicted_class'] == 1;
+            message.spamConfidence = result['confidence'];
+            message.isClassified = true;
+
+            // Store classification result
+            await _db.storeClassification(
+              messageId: message.id.toString(),
+              isSpam: message.isSpam,
+              confidence: message.spamConfidence,
+            );
+            
+            print('     ✓ ${message.isSpam ? "SPAM" : "HAM"} (${message.spamConfidence.toStringAsFixed(2)}%)');
+            notifyListeners(); // Update UI after each classification
           }
         }
+        
+        print('✅ Finished classifying conversation from: ${conversation.sender}\n');
       }
     } finally {
       _isClassifying = false;
+      print('🏁 Classification process completed');
     }
   }
 

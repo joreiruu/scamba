@@ -31,7 +31,7 @@ class DatabaseHelper {
     );
   }
 
-  Future<Map<String, dynamic>?> getStoredClassification(String messageId) async {
+  Future<Map<String, dynamic>?> getClassification(String messageId) async {
     final db = await database;
     final results = await db.query(
       'classifications',
@@ -41,7 +41,11 @@ class DatabaseHelper {
     return results.isNotEmpty ? results.first : null;
   }
 
-  Future<void> storeClassification(String messageId, bool isSpam, double confidence) async {
+  Future<void> storeClassification({
+    required String messageId, 
+    required bool isSpam, 
+    required double confidence,
+  }) async {
     final db = await database;
     await db.insert(
       'classifications',
