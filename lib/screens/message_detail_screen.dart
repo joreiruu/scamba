@@ -8,6 +8,8 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../providers/conversation_provider.dart';
 import '../widgets/selection_bar.dart'; // Import the selection bar
+import 'package:flutter_linkify/flutter_linkify.dart'; // Import for linkify functionality
+import 'package:url_launcher/url_launcher.dart'; // Import for launching URLs
 
 class MessageDetailScreen extends StatefulWidget {
   final model.Conversation conversation;
@@ -343,11 +345,29 @@ void _toggleFavoriteAndExitSelection(Message message) {
                                   right: 12.0,
                                   bottom: (message.isFavorite && !isSelectionMode) ? 22.0 : 12.0,
                                 ),      
-                                child: Text(
-                                  message.content,
+                                child: SelectableLinkify(
+                                  text: message.content,
                                   style: TextStyle(
                                     color: message.isSpam ? spamTextColor : hamTextColor,
                                     fontSize: 16,
+                                  ),
+                                  onOpen: (link) async {
+                                    try {
+                                      await launchUrl(Uri.parse(link.url));
+                                    } catch (e) {
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Could not open link: ${link.url}'),
+                                            backgroundColor: const Color(0xFF85BBD9),
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  },
+                                  linkStyle: TextStyle(
+                                    color: isDarkMode ? Colors.lightBlue : Colors.blue,
+                                    decoration: TextDecoration.underline,
                                   ),
                                 ),
                               ),
