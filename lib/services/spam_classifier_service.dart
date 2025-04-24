@@ -102,6 +102,8 @@ class SpamClassifierService {
 
   Future<Map<String, dynamic>> classifyMessage(Message message) async {
     try {
+      print('🔄 Classifying: "${message.content.substring(0, min(30, message.content.length))}..."');
+      
       final response = await http.post(
         Uri.parse(apiUrl),
         headers: {'Content-Type': 'application/json'},
@@ -111,15 +113,17 @@ class SpamClassifierService {
       if (response.statusCode == 200) {
         final List<dynamic> results = jsonDecode(response.body);
         if (results.isNotEmpty) {
+          final result = results[0];
           return {
-            'predicted_class': results[0]['predicted_class'],
-            'confidence': results[0]['confidence'],
+            'predicted_class': result['predicted_class'],
+            'confidence': result['confidence'],
           };
         }
       }
+      print('❌ Classification failed');
       return {'error': 'Classification failed'};
     } catch (e) {
-      print('⚠️ Classification error: $e');
+      print('⚠️ Error during classification: $e');
       return {'error': e.toString()};
     }
   }

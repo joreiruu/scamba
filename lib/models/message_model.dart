@@ -8,7 +8,6 @@ class Message {
   bool isFavorite;
   double spamConfidence;
   bool isClassified;
-  final String processingStatus;
 
   Message({
     required this.id,
@@ -20,7 +19,6 @@ class Message {
     this.isFavorite = false,
     this.spamConfidence = 0.0,
     this.isClassified = false,
-    this.processingStatus = 'pending',
   });
 
   Message copyWith({
@@ -29,7 +27,6 @@ class Message {
     bool? isRead,
     bool? isFavorite,
     bool? isClassified,
-    String? processingStatus,
   }) {
     return Message(
       id: id,
@@ -41,9 +38,6 @@ class Message {
       isFavorite: isFavorite ?? this.isFavorite,
       spamConfidence: spamConfidence ?? this.spamConfidence,
       isClassified: isClassified ?? this.isClassified,
-      processingStatus: processingStatus ?? this.processingStatus,
     );
   }
-
-  bool get needsIndicator => isClassified && isSpam;
 }

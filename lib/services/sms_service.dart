@@ -12,6 +12,7 @@ class SmsService {
   int _lastLoadedId = 0;
   bool _hasMoreMessages = true;
   bool _isInitialized = false;
+  final Set<int> _processedIds = {}; // Track processed SMS IDs
   
   Stream<List<Conversation>> get conversationsStream => _conversationsController.stream;
 
@@ -43,6 +44,11 @@ class SmsService {
 
       // Process new messages
       for (var sms in messages) {
+        // Skip if already processed
+        if (sms.id != null && _processedIds.contains(sms.id)) {
+          continue;
+        }
+
         final sender = sms.sender ?? 'Unknown';
         final message = Message(
           id: sms.id?.hashCode ?? 0,
@@ -53,7 +59,10 @@ class SmsService {
         );
         
         _messageCache.putIfAbsent(sender, () => []).add(message);
-        if (sms.id != null) _lastLoadedId = sms.id!;
+        if (sms.id != null) {
+          _lastLoadedId = sms.id!;
+          _processedIds.add(sms.id!);
+        }
       }
 
       return _groupIntoConversations();
