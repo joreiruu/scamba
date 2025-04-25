@@ -6,7 +6,7 @@ import 'package:scamba/providers/conversation_provider.dart';
 import '../screens/about_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/favorites_screen.dart';
-
+import '../screens/help_support_screen.dart';
 
 class HamburgerMenu extends StatelessWidget {
   const HamburgerMenu({super.key});
@@ -153,6 +153,22 @@ _buildMenuItem(
                     );
                   },
                 ),
+                
+                  const SizedBox(height: 4),
+                  
+                  ListTile(
+                    leading: const Icon(Icons.help_outline),
+                    title: const Text('Help & Support'),
+                    onTap: () {
+                      Navigator.pop(context); // Close drawer
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const HelpSupportScreen(),
+                        ),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
