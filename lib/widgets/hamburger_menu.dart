@@ -156,19 +156,22 @@ _buildMenuItem(
                 
                   const SizedBox(height: 4),
                   
-                  ListTile(
-                    leading: const Icon(Icons.help_outline),
-                    title: const Text('Help & Support'),
-                    onTap: () {
-                      Navigator.pop(context); // Close drawer
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const HelpSupportScreen(),
-                        ),
-                      );
-                    },
-                  ),
+                  _buildMenuItem(
+  context,
+  icon: Icons.help_outline,
+  title: 'Help & Support',
+  color: isDarkMode ? Colors.white : Colors.black54,
+  isDarkMode: isDarkMode,
+  onTap: () {
+    Navigator.pop(context);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const HelpSupportScreen(),
+      ),
+    );
+  },
+),
                 ],
               ),
             ),
