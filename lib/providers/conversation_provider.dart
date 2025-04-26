@@ -38,31 +38,18 @@ class ConversationProvider with ChangeNotifier {
   bool _isClassifying = false;
 
   ConversationProvider() {
-    // Only initialize once
-    if (!_isInitialized && !_isInitializing) {
-      _isInitializing = true;
-      
-      // Load saved states first
-      Future(() async {
-        await _loadArchivedIds();
-        await _loadDeletedIds();
-        await _loadReadStatus();
-        
-        // Listen to SMS updates after loading states
-        _subscription = _smsService.conversationsStream.listen((conversations) {
-          if (!_isInitialized) {
-            loadConversations(conversations);
-            _isInitialized = true;
-          } else {
-            // For subsequent updates, just refresh the conversations
-            refreshConversations();
-          }
-        });
-        
-        _isInitializing = false;
-        _smsService.startMessageListener();
-      });
-    }
+    // Only load saved states once
+    Future(() async {
+      await _loadArchivedIds();
+      await _loadDeletedIds();
+      await _loadReadStatus();
+      notifyListeners();
+    });
+
+    // Listen to SMS updates
+    _subscription = _smsService.conversationsStream.listen((conversations) {
+      refreshConversations();
+    });
   }
 
   // Getters
@@ -156,27 +143,31 @@ class ConversationProvider with ChangeNotifier {
     _isClassifying = true;
 
     try {
-      // Sort conversations by most recent message first
-      final sortedConversations = List<Conversation>.from(conversations)
-        ..sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+      // Only get conversations with unclassified messages
+      final conversationsToProcess = conversations.where((conv) => 
+        conv.messages.any((msg) => !msg.isClassified)
+      ).toList();
 
-      for (var conversation in sortedConversations) {
+      if (conversationsToProcess.isEmpty) {
+        print('✅ All messages are already classified');
+        return;
+      }
+
+      // Sort conversations by most recent message first
+      conversationsToProcess.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+
+      for (var conversation in conversationsToProcess) {
         print('📱 Processing conversation from: ${conversation.sender}');
         
-        // Get unclassified messages in this conversation, newest first
+        // Only get unclassified messages
         final unclassifiedMessages = conversation.messages
             .where((msg) => !msg.isClassified)
-            .toList()
-            ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+            .toList();
 
-        if (unclassifiedMessages.isEmpty) {
-          print('✓ All messages from ${conversation.sender} are already classified');
-          continue;
-        }
+        if (unclassifiedMessages.isEmpty) continue;
 
         print('🔄 Classifying ${unclassifiedMessages.length} messages from ${conversation.sender}');
         
-        // Process all messages in this conversation before moving to next
         for (var message in unclassifiedMessages) {
           print('  └─ Classifying message: "${message.content.substring(0, min(30, message.content.length))}..."');
           
@@ -187,20 +178,16 @@ class ConversationProvider with ChangeNotifier {
             message.spamConfidence = result['confidence'];
             message.isClassified = true;
 
-            // Store classification result
             await _db.storeClassification(
               messageId: message.id.toString(),
               isSpam: message.isSpam,
               confidence: message.spamConfidence,
             );
-            
-            print('     ✓ ${message.isSpam ? "SPAM" : "HAM"} (${message.spamConfidence.toStringAsFixed(2)}%)');
-            notifyListeners(); // Update UI after each classification
           }
         }
-        
-        print('✅ Finished classifying conversation from: ${conversation.sender}\n');
       }
+
+      notifyListeners();
     } finally {
       _isClassifying = false;
       print('🏁 Classification process completed');

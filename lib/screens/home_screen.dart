@@ -208,154 +208,153 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
     final filterProvider = Provider.of<FilterProvider>(context);
     final conversationProvider = Provider.of<ConversationProvider>(context);
 
-    // Filter out archived and deleted conversations first
+    // Filter conversations once
     final filteredConversations = conversationList.where((conv) => 
       !conversationProvider.archivedConversations.any((archived) => archived.id == conv.id) &&
       !conversationProvider.deletedConversations.any((deleted) => deleted.id == conv.id)
     ).toList();
 
-    // Only apply ham filtering if we're in the main tab (All Messages)
     final filteredList = (isMainTab && filterProvider.filterHamMessages)
-        ? filteredConversations.where((conv) => 
-            !conv.messages.any((message) => message.isSpam) // Keep only ham messages
-          ).toList()
-        : filteredConversations; // Show all messages for other tabs or when filter is off
+      ? filteredConversations.where((conv) => 
+          !conv.messages.any((message) => message.isSpam)
+        ).toList()
+      : filteredConversations;
 
     return ListView.builder(
-      key: PageStorageKey(isMainTab ? 'main_tab' : 'spam_tab'), // Preserve scroll position
+      key: PageStorageKey(isMainTab ? 'main_tab' : 'spam_tab'),
       controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
-      itemCount: filteredList.length + 1,  // Add 1 for loading indicator
+      itemCount: filteredList.length,
+      cacheExtent: 100, // Cache more items
       itemBuilder: (context, index) {
-        if (index == filteredList.length) {
-          // Show loading indicator at the bottom
-          return _isLoadingMore
-              ? const Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              : const SizedBox();
-        }
-
         final conversation = filteredList[index];
-        final lastMessage = conversation.messages.isNotEmpty
-            ? conversation.messages.first  // Changed from last to first
-            : null;
-        
+        // Cache the last message to avoid repeated access
+        final lastMessage = conversation.messages.isNotEmpty ? 
+          conversation.messages.first : null;
         final isSelected = selectedMessages.contains(conversation.id);
 
-        return Dismissible(
-          key: ValueKey(conversation.id),
-          background: _swipeBackground(Colors.green, Icons.archive_outlined, Alignment.centerLeft),
-          secondaryBackground: _swipeBackground(Colors.red, Icons.delete_outlined, Alignment.centerRight),
-
-          onDismissed: (direction) {
-            if (direction == DismissDirection.startToEnd) {
-              archiveSingleConversation(conversation);
-            } else if (direction == DismissDirection.endToStart) {
-              deleteSingleConversation(conversation);
-            }
-          },
-
-          child: Container(
-            color: isSelected ? Colors.blue.withAlpha(26) : null,
-            child: ListTile(
-              leading: Stack(
-                alignment: Alignment.center,
-                children: [
-                  CircleAvatar(
-                    backgroundColor: isSelected
-                        ? Colors.blue
-                        : conversation.messages.isNotEmpty && conversation.messages.first.isSpam
-                            ? Colors.transparent
-                            : const Color(0xFF85BBD9),
-                    child: isSelected
-                        ? const Icon(Icons.check, color: Colors.white)
-                        : conversation.messages.isNotEmpty && conversation.messages.first.isSpam
-                            ? ClipOval(
-                                child: Image.asset(
-                                  'assets/warning_icon.png',
-                                  fit: BoxFit.cover,
-                                  width: double.infinity,
-                                  height: double.infinity,
-                                ),
-                              )
-                            : Text(
-                                conversation.sender[0].toUpperCase(),
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                              ),
-                  ),
-                ],
-              ),
-              title: Text(
-                conversation.sender,
-                style: TextStyle(
-                  fontWeight: lastMessage != null && !lastMessage.isRead
-                      ? FontWeight.bold
-                      : FontWeight.normal,
-                ),
-              ),
-              subtitle: lastMessage != null
-                  ? Text(
-                      lastMessage.content,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: !lastMessage.isRead ? FontWeight.bold : FontWeight.normal,
-                      ),
-                    )
-                  : const Text("No messages"),
-              trailing: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  if (lastMessage != null)
-                    Text(
-                      _formatDate(lastMessage.timestamp),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: conversation.unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
-                      ),
-                    ),
-                  if (conversation.unreadCount > 0)
-                    Container(
-                      margin: const EdgeInsets.only(top: 5),
-                      width: 18,
-                      height: 18,
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        conversation.unreadCount.toString(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              onTap: () {
-                if (selectionMode) {
-                  _toggleSelection(conversation.id);
-                } else {
-                  _markMessageAsRead(conversation.messages.first, conversation.messages);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => MessageDetailScreen(conversation: conversation),
-                    ),
-                  );
-                }
-              },
-              onLongPress: () => _toggleSelection(conversation.id),
-            ),
-          ),
+        return _buildConversationTile(
+          conversation: conversation,
+          lastMessage: lastMessage,
+          isSelected: isSelected,
         );
       },
+    );
+  }
+
+  Widget _buildConversationTile({
+    required model.Conversation conversation,
+    Message? lastMessage,
+    required bool isSelected,
+  }) {
+    return Dismissible(
+      key: ValueKey(conversation.id),
+      background: _swipeBackground(Colors.green, Icons.archive_outlined, Alignment.centerLeft),
+      secondaryBackground: _swipeBackground(Colors.red, Icons.delete_outlined, Alignment.centerRight),
+      onDismissed: (direction) {
+        if (direction == DismissDirection.startToEnd) {
+          archiveSingleConversation(conversation);
+        } else {
+          deleteSingleConversation(conversation);
+        }
+      },
+      child: Container(
+        color: isSelected ? Colors.blue.withAlpha(26) : null,
+        child: ListTile(
+          leading: Stack(
+            alignment: Alignment.center,
+            children: [
+              CircleAvatar(
+                backgroundColor: isSelected
+                    ? Colors.blue
+                    : conversation.messages.isNotEmpty && conversation.messages.first.isSpam
+                        ? Colors.transparent
+                        : const Color(0xFF85BBD9),
+                child: isSelected
+                    ? const Icon(Icons.check, color: Colors.white)
+                    : conversation.messages.isNotEmpty && conversation.messages.first.isSpam
+                        ? ClipOval(
+                            child: Image.asset(
+                              'assets/warning_icon.png',
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                            ),
+                          )
+                        : Text(
+                            conversation.sender[0].toUpperCase(),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+              ),
+            ],
+          ),
+          title: Text(
+            conversation.sender,
+            style: TextStyle(
+              fontWeight: lastMessage != null && !lastMessage.isRead
+                  ? FontWeight.bold
+                  : FontWeight.normal,
+            ),
+          ),
+          subtitle: lastMessage != null
+              ? Text(
+                  lastMessage.content,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: !lastMessage.isRead ? FontWeight.bold : FontWeight.normal,
+                  ),
+                )
+              : const Text("No messages"),
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (lastMessage != null)
+                Text(
+                  _formatDate(lastMessage.timestamp),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: conversation.unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+              if (conversation.unreadCount > 0)
+                Container(
+                  margin: const EdgeInsets.only(top: 5),
+                  width: 18,
+                  height: 18,
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    conversation.unreadCount.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          onTap: () {
+            if (selectionMode) {
+              _toggleSelection(conversation.id);
+            } else {
+              _markMessageAsRead(conversation.messages.first, conversation.messages);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MessageDetailScreen(conversation: conversation),
+                ),
+              );
+            }
+          },
+          onLongPress: () => _toggleSelection(conversation.id),
+        ),
+      ),
     );
   }
 

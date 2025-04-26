@@ -3,6 +3,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../models/conversation_model.dart';
 import '../models/message_model.dart';
 import 'dart:async';
+import 'dart:math';
 
 class SmsService {
   static const int BATCH_SIZE = 100;
@@ -33,38 +34,89 @@ class SmsService {
         _isInitialized = true;
       }
 
-      // Only load messages if cache is empty or loading more
-      if (_messageCache.isEmpty || loadMore) {
-        final messages = await _query.querySms(
-          start: _lastLoadedId,
-          count: BATCH_SIZE,
-        );
+    // Return cached messages if not loading more
+    if (!loadMore && _messageCache.isNotEmpty) {
+      return _groupIntoConversations();
+    }
 
-        // Process new messages
-        for (var sms in messages) {
-          if (sms.id != null && !_processedIds.contains(sms.id)) {
-            _processNewMessage(sms);
-          }
+    try {
+      final messages = await _query.querySms(
+        start: _lastLoadedId,
+        count: BATCH_SIZE,
+      );
+
+      if (messages.isEmpty || messages.length < BATCH_SIZE) {
+        _hasMoreMessages = false;
+      }
+
+      // Process new messages
+      for (var sms in messages) {
+        // Skip if already processed
+        if (sms.id != null && _processedIds.contains(sms.id)) {
+          continue;
+        }
+
+        final sender = sms.sender ?? 'Unknown';
+        final message = Message(
+          id: sms.id?.hashCode ?? 0,
+          sender: sender,
+          content: sms.body ?? '',
+          timestamp: sms.date ?? DateTime.now(),
+          isRead: sms.read ?? false,
+        );
+        
+        _messageCache.putIfAbsent(sender, () => []).add(message);
+        if (sms.id != null) {
+          _lastLoadedId = sms.id!;
+          _processedIds.add(sms.id!);
         }
       }
 
-      _isLoading = false;
       return _groupIntoConversations();
     } catch (e) {
-      _isLoading = false;
       print('Error loading messages: $e');
-      return _groupIntoConversations();
+      return _groupIntoConversations(); // Return cached messages on error
     }
   }
 
   Future<void> refreshConversations() async {
     try {
-      final conversations = await getConversations();
-      if (conversations != null) {
+      print('📱 Refreshing conversations...');
+      final messages = await _query.querySms(
+        kinds: [SmsQueryKind.inbox],
+        count: BATCH_SIZE,
+      );
+
+      bool hasNewMessages = false;
+      print('📬 Found ${messages.length} total messages');
+
+      for (var sms in messages) {
+        // Only process truly new messages
+        if (sms.id != null && !_processedIds.contains(sms.id)) {
+          print('✨ Found new message from: ${sms.sender}');
+          final sender = sms.sender ?? 'Unknown';
+          final message = Message(
+            id: sms.id?.hashCode ?? 0,
+            sender: sender,
+            content: sms.body ?? '',
+            timestamp: sms.date ?? DateTime.now(),
+            isRead: sms.read ?? false,
+          );
+          
+          _messageCache.putIfAbsent(sender, () => []).insert(0, message);
+          _processedIds.add(sms.id!);
+          hasNewMessages = true;
+        }
+      }
+
+      // Only update if we actually found new messages
+      if (hasNewMessages) {
+        print('🔄 Updating with new messages');
+        final conversations = _groupIntoConversations();
         _conversationsController.add(conversations);
       }
     } catch (e) {
-      print('Error refreshing conversations: $e');
+      print('❌ Error refreshing conversations: $e');
     }
   }
 
