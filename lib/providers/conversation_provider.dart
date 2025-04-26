@@ -36,9 +36,8 @@ class ConversationProvider with ChangeNotifier {
   final Set<int> _persistentDeletedIds = {};
   bool _isClassifying = false;
 
-  // Remove auto-refresh timer from constructor
   ConversationProvider() {
-    // Only load saved states once
+    // Load saved states
     Future(() async {
       await _loadArchivedIds();
       await _loadDeletedIds();
@@ -46,9 +45,49 @@ class ConversationProvider with ChangeNotifier {
       notifyListeners();
     });
 
+    // Check for new messages periodically
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      await _smsService.refreshConversations();
+    });
+
     // Listen to SMS updates
-    _subscription = _smsService.conversationsStream.listen((conversations) {
-      refreshConversations();
+    _subscription = _smsService.conversationsStream.listen((conversations) async {
+      print('📱 Received conversation update');
+      
+      // Preserve existing states before updating
+      final existingMessages = Map<int, Message>.fromEntries(
+        _conversations.expand((c) => c.messages).map((m) => MapEntry(m.id, m))
+      );
+
+      // Update conversations while preserving message states
+      _conversations = conversations.map((conv) {
+        return conv.copyWith(
+          messages: conv.messages.map((msg) {
+            final existing = existingMessages[msg.id];
+            if (existing != null) {
+              // Keep existing classification state
+              return msg.copyWith(
+                isClassified: existing.isClassified,
+                isSpam: existing.isSpam,
+                spamConfidence: existing.spamConfidence,
+                isRead: existing.isRead,
+              );
+            }
+            return msg;
+          }).toList(),
+        );
+      }).toList();
+
+      // Only classify messages that aren't already classified
+      final unclassifiedConversations = _conversations.where((conv) => 
+        conv.messages.any((msg) => !msg.isClassified)
+      ).toList();
+
+      if (unclassifiedConversations.isNotEmpty) {
+        await classifyMessagesInBackground(unclassifiedConversations);
+      }
+
+      notifyListeners();
     });
   }
 
@@ -141,27 +180,31 @@ class ConversationProvider with ChangeNotifier {
     _isClassifying = true;
 
     try {
-      // Sort conversations by most recent message first
-      final sortedConversations = List<Conversation>.from(conversations)
-        ..sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+      // Only get conversations with unclassified messages
+      final conversationsToProcess = conversations.where((conv) => 
+        conv.messages.any((msg) => !msg.isClassified)
+      ).toList();
 
-      for (var conversation in sortedConversations) {
+      if (conversationsToProcess.isEmpty) {
+        print('✅ All messages are already classified');
+        return;
+      }
+
+      // Sort conversations by most recent message first
+      conversationsToProcess.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+
+      for (var conversation in conversationsToProcess) {
         print('📱 Processing conversation from: ${conversation.sender}');
         
-        // Get unclassified messages in this conversation, newest first
+        // Only get unclassified messages
         final unclassifiedMessages = conversation.messages
             .where((msg) => !msg.isClassified)
-            .toList()
-            ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+            .toList();
 
-        if (unclassifiedMessages.isEmpty) {
-          print('✓ All messages from ${conversation.sender} are already classified');
-          continue;
-        }
+        if (unclassifiedMessages.isEmpty) continue;
 
         print('🔄 Classifying ${unclassifiedMessages.length} messages from ${conversation.sender}');
         
-        // Process all messages in this conversation before moving to next
         for (var message in unclassifiedMessages) {
           print('  └─ Classifying message: "${message.content.substring(0, min(30, message.content.length))}..."');
           
@@ -172,20 +215,16 @@ class ConversationProvider with ChangeNotifier {
             message.spamConfidence = result['confidence'];
             message.isClassified = true;
 
-            // Store classification result
             await _db.storeClassification(
               messageId: message.id.toString(),
               isSpam: message.isSpam,
               confidence: message.spamConfidence,
             );
-            
-            print('     ✓ ${message.isSpam ? "SPAM" : "HAM"} (${message.spamConfidence.toStringAsFixed(2)}%)');
-            notifyListeners(); // Update UI after each classification
           }
         }
-        
-        print('✅ Finished classifying conversation from: ${conversation.sender}\n');
       }
+
+      notifyListeners();
     } finally {
       _isClassifying = false;
       print('🏁 Classification process completed');
