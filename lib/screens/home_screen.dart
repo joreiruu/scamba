@@ -267,12 +267,12 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
               CircleAvatar(
                 backgroundColor: isSelected
                     ? Colors.blue
-                    : conversation.messages.isNotEmpty && conversation.messages.first.isSpam
+                    : conversation.hasSpamMessages // Use new getter
                         ? Colors.transparent
                         : const Color(0xFF85BBD9),
                 child: isSelected
                     ? const Icon(Icons.check, color: Colors.white)
-                    : conversation.messages.isNotEmpty && conversation.messages.first.isSpam
+                    : conversation.hasSpamMessages // Use new getter
                         ? ClipOval(
                             child: Image.asset(
                               'assets/warning_icon.png',

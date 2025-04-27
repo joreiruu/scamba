@@ -37,28 +37,34 @@ class ConversationProvider with ChangeNotifier {
   bool _isClassifying = false;
 
   ConversationProvider() {
-    // Initial load and classification
     _initializeProvider();
-
-    // Setup periodic refresh
-    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
-      await _smsService.refreshConversations();
-    });
   }
 
   Future<void> _initializeProvider() async {
-    await _loadArchivedIds();
-    await _loadDeletedIds();
     await _loadReadStatus();
+    await _loadDeletedIds();
+    notifyListeners();
+  }
 
-    // Get initial messages
-    final initialConversations = await _smsService.getConversations();
-    await loadConversations(initialConversations);
+  Future<void> _loadReadStatus() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? readStatusJson = prefs.getString(_readMessageIdsKey);
 
-    // Listen for updates
-    _subscription = _smsService.conversationsStream.listen((conversations) async {
-      await _updateConversations(conversations);
-    });
+      if (readStatusJson != null) {
+        final Map<String, dynamic> readStatus = jsonDecode(readStatusJson);
+        _messageReadStatus.clear();
+        readStatus.forEach((key, value) {
+          _messageReadStatus[int.parse(key)] = value as bool;
+        });
+        
+        // Apply read status to existing conversations
+        _applyReadStatus(_conversations);
+        _applyReadStatus(_archivedConversations);
+      }
+    } catch (e) {
+      print('Error loading read status: $e');
+    }
   }
 
   Future<void> _updateConversations(List<Conversation> newConversations) async {
@@ -218,24 +224,17 @@ class ConversationProvider with ChangeNotifier {
         return;
       }
 
-      // Sort conversations by most recent message first
-      conversationsToProcess.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
-
       for (var conversation in conversationsToProcess) {
         print('📱 Processing conversation from: ${conversation.sender}');
         
-        // Only get unclassified messages
+        // Get unclassified messages
         final unclassifiedMessages = conversation.messages
             .where((msg) => !msg.isClassified)
             .toList();
 
         if (unclassifiedMessages.isEmpty) continue;
 
-        print('🔄 Classifying ${unclassifiedMessages.length} messages from ${conversation.sender}');
-        
         for (var message in unclassifiedMessages) {
-          print('  └─ Classifying message: "${message.content.substring(0, min(30, message.content.length))}..."');
-          
           final result = await _classifier.classifyMessage(message);
           
           if (!result.containsKey('error')) {
@@ -248,14 +247,14 @@ class ConversationProvider with ChangeNotifier {
               isSpam: message.isSpam,
               confidence: message.spamConfidence,
             );
+
+            // Trigger UI update after each message classification
+            notifyListeners();
           }
         }
       }
-
-      notifyListeners();
     } finally {
       _isClassifying = false;
-      print('🏁 Classification process completed');
     }
   }
 
@@ -393,7 +392,7 @@ class ConversationProvider with ChangeNotifier {
   }
 
   // Mark all messages in a conversation as read
-  void markConversationAsRead(Conversation conversation) {
+  Future<void> markConversationAsRead(Conversation conversation) async {
     bool changed = false;
     for (var message in conversation.messages) {
       if (!message.isRead) {
@@ -404,14 +403,12 @@ class ConversationProvider with ChangeNotifier {
     }
 
     if (changed) {
-      _saveReadStatus().then((_) {
-        print('Read status saved for conversation ${conversation.id}'); // Debug log
-        notifyListeners();
-      });
+      await _saveReadStatus(); // Wait for save to complete
+      notifyListeners();
     }
   }
 
-  void markAllAsRead() {
+  Future<void> markAllAsRead() async {
     bool anyChanges = false;
 
     // Mark messages as read in main conversations
@@ -437,7 +434,7 @@ class ConversationProvider with ChangeNotifier {
     }
 
     if (anyChanges) {
-      _saveReadStatus(); // Save read status immediately
+      await _saveReadStatus(); // Wait for save to complete
       notifyListeners();
     }
   }
@@ -653,30 +650,6 @@ class ConversationProvider with ChangeNotifier {
       print('Saved read status: $jsonString'); // Debug log
     } catch (e) {
       print('Error saving read status: $e');
-    }
-  }
-
-  Future<void> _loadReadStatus() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final String? readStatusJson = prefs.getString(_readMessageIdsKey);
-      print('Loaded read status: $readStatusJson'); // Debug log
-
-      if (readStatusJson != null) {
-        final Map<String, dynamic> readStatus = jsonDecode(readStatusJson);
-        _messageReadStatus.clear();
-
-        // Convert string keys back to int
-        readStatus.forEach((key, value) {
-          _messageReadStatus[int.parse(key)] = value;
-        });
-
-        // Apply read status to all conversations
-        _applyReadStatus(_conversations);
-        _applyReadStatus(_archivedConversations);
-      }
-    } catch (e) {
-      print('Error loading read status: $e');
     }
   }
 
