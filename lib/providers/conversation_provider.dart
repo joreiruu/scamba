@@ -38,6 +38,7 @@ class ConversationProvider with ChangeNotifier {
   bool _isClassifying = false;
 
   ConversationProvider() {
+<<<<<<< HEAD
     // Only load saved states once
     Future(() async {
       await _loadArchivedIds();
@@ -49,7 +50,88 @@ class ConversationProvider with ChangeNotifier {
     // Listen to SMS updates
     _subscription = _smsService.conversationsStream.listen((conversations) {
       refreshConversations();
+=======
+    // Initial load and classification
+    _initializeProvider();
+
+    // Setup periodic refresh
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      await _smsService.refreshConversations();
     });
+  }
+
+  Future<void> _initializeProvider() async {
+    await _loadArchivedIds();
+    await _loadDeletedIds();
+    await _loadReadStatus();
+
+    // Get initial messages
+    final initialConversations = await _smsService.getConversations();
+    await loadConversations(initialConversations);
+
+    // Listen for updates
+    _subscription = _smsService.conversationsStream.listen((conversations) async {
+      await _updateConversations(conversations);
+>>>>>>> test
+    });
+  }
+
+  Future<void> _updateConversations(List<Conversation> newConversations) async {
+    // Preserve existing states
+    final existingMessages = Map<int, Message>.fromEntries(
+      _conversations.expand((c) => c.messages).map((m) => MapEntry(m.id, m))
+    );
+
+    // Update conversations while preserving states
+    final updatedConversations = newConversations.map((conv) {
+      return conv.copyWith(
+        messages: conv.messages.map((msg) {
+          final existing = existingMessages[msg.id];
+          if (existing != null) {
+            return msg.copyWith(
+              isClassified: existing.isClassified,
+              isSpam: existing.isSpam,
+              spamConfidence: existing.spamConfidence,
+              isRead: existing.isRead,
+            );
+          }
+          return msg;
+        }).toList(),
+      );
+    }).toList();
+
+    // Classify any new unclassified messages
+    final unclassifiedConversations = updatedConversations.where((conv) => 
+      conv.messages.any((msg) => !msg.isClassified)
+    ).toList();
+
+    if (unclassifiedConversations.isNotEmpty) {
+      await classifyMessagesInBackground(unclassifiedConversations);
+    }
+
+    // Update conversation lists while preserving states
+    _updateConversationLists(updatedConversations);
+    notifyListeners();
+  }
+
+  void _updateConversationLists(List<Conversation> conversations) {
+    final mainConversations = <Conversation>[];
+    final archivedConvs = <Conversation>[];
+    final deletedConvs = <Conversation>[];
+
+    for (var conversation in conversations) {
+      if (_persistentDeletedIds.contains(conversation.id)) {
+        deletedConvs.add(conversation);
+      } else if (_persistentArchivedIds.contains(conversation.id)) {
+        archivedConvs.add(conversation);
+      } else {
+        mainConversations.add(conversation);
+      }
+    }
+
+    _conversations = mainConversations;
+    _archivedConversations = archivedConvs;
+    _deletedConversations = deletedConvs;
   }
 
   // Getters

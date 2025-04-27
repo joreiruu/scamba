@@ -41,7 +41,7 @@ class SmsService {
 
     try {
       final messages = await _query.querySms(
-        start: _lastLoadedId,
+        kinds: [SmsQueryKind.inbox],
         count: BATCH_SIZE,
       );
 
@@ -49,30 +49,32 @@ class SmsService {
         _hasMoreMessages = false;
       }
 
-      // Process new messages
+      bool hasNewMessages = false;
       for (var sms in messages) {
-        // Skip if already processed
-        if (sms.id != null && _processedIds.contains(sms.id)) {
-          continue;
-        }
-
-        final sender = sms.sender ?? 'Unknown';
-        final message = Message(
-          id: sms.id?.hashCode ?? 0,
-          sender: sender,
-          content: sms.body ?? '',
-          timestamp: sms.date ?? DateTime.now(),
-          isRead: sms.read ?? false,
-        );
-        
-        _messageCache.putIfAbsent(sender, () => []).add(message);
-        if (sms.id != null) {
-          _lastLoadedId = sms.id!;
+        if (sms.id != null && !_processedIds.contains(sms.id)) {
+          hasNewMessages = true;
+          print('✨ NEW MESSAGE DETECTED:');
+          print('   From: ${sms.sender}');
+          
+          final sender = sms.sender ?? 'Unknown';
+          final message = Message(
+            id: sms.id?.hashCode ?? 0,
+            sender: sender,
+            content: sms.body ?? '',
+            timestamp: sms.date ?? DateTime.now(),
+            isRead: sms.read ?? false,
+          );
+          
+          _messageCache.putIfAbsent(sender, () => []).insert(0, message);
           _processedIds.add(sms.id!);
         }
       }
 
-      return _groupIntoConversations();
+      final conversations = _groupIntoConversations();
+      if (hasNewMessages) {
+        _conversationsController.add(conversations);
+      }
+      return conversations;
     } catch (e) {
       print('Error loading messages: $e');
       return _groupIntoConversations(); // Return cached messages on error
@@ -103,18 +105,16 @@ class SmsService {
             isRead: sms.read ?? false,
           );
           
+          // Insert new messages at the beginning of the list
           _messageCache.putIfAbsent(sender, () => []).insert(0, message);
           _processedIds.add(sms.id!);
           hasNewMessages = true;
         }
       }
 
-      // Only update if we actually found new messages
-      if (hasNewMessages) {
-        print('🔄 Updating with new messages');
-        final conversations = _groupIntoConversations();
-        _conversationsController.add(conversations);
-      }
+      // Always send update through stream, even if no new messages
+      final conversations = _groupIntoConversations();
+      _conversationsController.add(conversations);
     } catch (e) {
       print('❌ Error refreshing conversations: $e');
     }
