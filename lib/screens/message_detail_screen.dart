@@ -68,7 +68,7 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
     });
   }
 
-   void _handleLongPress(Message message) {
+  void _handleLongPress(Message message) {
     setState(() {
       isSelectionMode = true;
       if (!selectedMessages.contains(message)) {
@@ -77,40 +77,39 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
     });
   }
 
-   // Add a method to handle message selection/deselection
   void _toggleMessageSelection(Message message) {
-  setState(() {
-    if (selectedMessages.contains(message)) {
-      selectedMessages.remove(message);
-      if (selectedMessages.isEmpty) {
-        isSelectionMode = false; // Exit selection mode if no messages selected
+    setState(() {
+      if (selectedMessages.contains(message)) {
+        selectedMessages.remove(message);
+        if (selectedMessages.isEmpty) {
+          isSelectionMode = false; // Exit selection mode if no messages selected
+        }
+      } else {
+        selectedMessages.add(message);
       }
-    } else {
-      selectedMessages.add(message);
-    }
-  });
-}
+    });
+  }
 
-   void _cancelSelection() {
+  void _cancelSelection() {
     setState(() {
       selectedMessages.clear();
       isSelectionMode = false;
     });
   }
 
-   void _copySelectedMessages() {
+  void _copySelectedMessages() {
     final String textToCopy = selectedMessages
         .map((message) => message.content)
         .join('\n\n');
     Clipboard.setData(ClipboardData(text: textToCopy));
     
     // Show a snackbar to confirm
-  ScaffoldMessenger.of(context).showSnackBar(
-  const SnackBar(
-    content: Text('Copied to clipboard'),
-    backgroundColor: Color(0xFF85BBD9), // Custom background color
-  ),
-);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Copied to clipboard'),
+        backgroundColor: Color(0xFF85BBD9), // Custom background color
+      ),
+    );
     
     _cancelSelection(); // Exit selection mode after copying
   }
@@ -126,44 +125,102 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
   }
 
   void _showMoreOptions(BuildContext context) {
-  final provider = Provider.of<ConversationProvider>(context, listen: false);
-  final isArchived = provider.archivedConversations
-      .any((conv) => conv.id == widget.conversation.id);
+    final provider = Provider.of<ConversationProvider>(context, listen: false);
+    final isArchived = provider.archivedConversations
+        .any((conv) => conv.id == widget.conversation.id);
 
-  showModalBottomSheet(
-    context: context,
-    builder: (context) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: Icon(
-              isArchived ? Icons.unarchive : Icons.archive,
-              color: Theme.of(context).primaryColor,
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(
+                isArchived ? Icons.unarchive : Icons.archive,
+                color: Theme.of(context).primaryColor,
+              ),
+              title: Text(isArchived ? 'Unarchive' : 'Archive'),
+              onTap: () {
+                if (isArchived) {
+                  provider.restoreArchivedConversation(widget.conversation);
+                } else {
+                  provider.archiveConversation(widget.conversation);
+                }
+                Navigator.pop(context); // Close bottom sheet
+                Navigator.pop(context); // Return to previous screen
+
+                // Show snackbar
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(isArchived ? 'Conversation unarchived' : 'Conversation archived'),
+                    backgroundColor: const Color(0xFF85BBD9),
+                    action: SnackBarAction(
+                      label: 'Undo',
+                      onPressed: () {
+                        if (isArchived) {
+                          provider.archiveConversation(widget.conversation);
+                        } else {
+                          provider.restoreArchivedConversation(widget.conversation);
+                        }
+                      },
+                    ),
+                    duration: const Duration(seconds: 5),
+                  ),
+                );
+              },
             ),
-            title: Text(isArchived ? 'Unarchive' : 'Archive'),
-            onTap: () {
-              if (isArchived) {
-                provider.restoreArchivedConversation(widget.conversation);
-              } else {
-                provider.archiveConversation(widget.conversation);
-              }
-              Navigator.pop(context); // Close bottom sheet
-              Navigator.pop(context); // Return to previous screen
+            ListTile(
+              leading: const Icon(
+                Icons.delete,
+                color: Colors.red,
+              ),
+              title: const Text(
+                'Delete',
+                style: TextStyle(color: Colors.red),
+              ),
+              onTap: () {
+                Navigator.pop(context); // Close bottom sheet
+                _showDeleteConfirmation(context);
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
 
-              // Show snackbar
+  void _showDeleteConfirmation(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Conversation'),
+        content: const Text('Are you sure you want to delete this conversation? This can be undone from Recently Deleted.'),
+        actions: [
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.pop(context),
+          ),
+          TextButton(
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red),
+            ),
+            onPressed: () {
+              final provider = Provider.of<ConversationProvider>(context, listen: false);
+              provider.deleteConversation(widget.conversation);
+              Navigator.pop(context); // Close dialog
+              Navigator.pop(context); // Return to previous screen
+              
+              // Show snackbar with undo option
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(isArchived ? 'Conversation unarchived' : 'Conversation archived'),
+                  content: const Text('Conversation deleted'),
                   backgroundColor: const Color(0xFF85BBD9),
                   action: SnackBarAction(
                     label: 'Undo',
                     onPressed: () {
-                      if (isArchived) {
-                        provider.archiveConversation(widget.conversation);
-                      } else {
-                        provider.restoreArchivedConversation(widget.conversation);
-                      }
+                      provider.restoreDeletedConversation(widget.conversation);
                     },
                   ),
                   duration: const Duration(seconds: 5),
@@ -171,96 +228,51 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
               );
             },
           ),
-          ListTile(
-            leading: const Icon(
-              Icons.delete,
-              color: Colors.red,
-            ),
-            title: const Text(
-              'Delete',
-              style: TextStyle(color: Colors.red),
-            ),
-            onTap: () {
-              Navigator.pop(context); // Close bottom sheet
-              _showDeleteConfirmation(context);
-            },
-          ),
         ],
-      );
-    },
-  );
-}
-
-void _showDeleteConfirmation(BuildContext context) {
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Delete Conversation'),
-      content: const Text('Are you sure you want to delete this conversation? This can be undone from Recently Deleted.'),
-      actions: [
-        TextButton(
-          child: const Text('Cancel'),
-          onPressed: () => Navigator.pop(context),
-        ),
-        TextButton(
-          child: const Text(
-            'Delete',
-            style: TextStyle(color: Colors.red),
-          ),
-          onPressed: () {
-            final provider = Provider.of<ConversationProvider>(context, listen: false);
-            provider.deleteConversation(widget.conversation);
-            Navigator.pop(context); // Close dialog
-            Navigator.pop(context); // Return to previous screen
-            
-            // Show snackbar with undo option
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('Conversation deleted'),
-                backgroundColor: const Color(0xFF85BBD9),
-                action: SnackBarAction(
-                  label: 'Undo',
-                  onPressed: () {
-                    provider.restoreDeletedConversation(widget.conversation);
-                  },
-                ),
-                duration: const Duration(seconds: 5),
-              ),
-            );
-          },
-        ),
-      ],
-    ),
-  );
-}
-
-void _toggleFavoriteAndExitSelection(Message message) {
-  // Toggle favorite status using provider
-  Provider.of<ConversationProvider>(context, listen: false)
-      .toggleMessageFavorite(message);
-      
-  // Exit selection mode
-  setState(() {
-    selectedMessages.clear();
-    isSelectionMode = false;
-  });
-}
-
-Color _getMessageColor(Message message, bool isDarkMode, bool isSelected) {
-  if (isSelected) {
-    return Color.fromRGBO(33, 150, 243, 0.3);
+      ),
+    );
   }
-  
-  if (!message.isClassified) {
-    return isDarkMode ? Colors.grey[800]! : Colors.grey[300]!;
-  }
-  
-  return message.isSpam 
-      ? (isDarkMode ? Colors.red[900]! : Colors.red[100]!)
-      : (isDarkMode ? Colors.blueGrey[800]! : Colors.blue[100]!);
-}
 
-   @override
+  void _toggleFavoriteAndExitSelection(Message message) {
+    final provider = Provider.of<ConversationProvider>(context, listen: false);
+    provider.toggleMessageFavorite(message);
+
+    // Show snackbar feedback
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message.isFavorite ? 'Removed from favorites' : 'Added to favorites',
+        ),
+        duration: const Duration(seconds: 2),
+        backgroundColor: const Color(0xFF85BBD9),
+      ),
+    );
+    
+    setState(() {
+      selectedMessages.clear();
+      isSelectionMode = false;
+    });
+  }
+
+  Color _getMessageColor(Message message, bool isDarkMode, bool isSelected) {
+    if (isSelected) {
+      return Color.fromRGBO(33, 150, 243, 0.3);
+    }
+    
+    if (message.isFavorite) {
+      return isDarkMode ? Colors.pink[900]! : Colors.pink[50]!;
+    }
+    
+    if (!message.isClassified) {
+      return isDarkMode ? Colors.grey[800]! : Colors.grey[300]!;
+    }
+    
+    return message.isSpam 
+        ? (isDarkMode ? Colors.red[900]! : Colors.red[100]!)
+        : (isDarkMode ? Colors.blue[900]! : Colors.blue[50]!);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bool isDarkMode = theme.brightness == Brightness.dark;
@@ -280,11 +292,11 @@ Color _getMessageColor(Message message, bool isDarkMode, bool isSelected) {
         elevation: 0,
         titleSpacing: 0,
         title: SelectionBar(
-  selectedMessages: selectedMessages,
-  onCopy: _copySelectedMessages,
-  onCancel: _cancelSelection,
-  onToggleFavorite: _toggleFavoriteAndExitSelection,
-),
+          selectedMessages: selectedMessages,
+          onCopy: _copySelectedMessages,
+          onCancel: _cancelSelection,
+          onToggleFavorite: _toggleFavoriteAndExitSelection,
+        ),
       )
           : AppBar(
               leading: IconButton(

@@ -508,27 +508,21 @@ class ConversationProvider with ChangeNotifier {
   void toggleMessageFavorite(Message message) {
     bool updated = false;
     bool newFavoriteStatus = false;
-
-    // Check all conversations
+    
+    // Check active conversations
     for (var i = 0; i < _conversations.length; i++) {
       final messageIndex = _conversations[i].messages.indexWhere((m) => m.id == message.id);
       if (messageIndex != -1) {
-        // Toggle favorite status and save the new status
         newFavoriteStatus = !_conversations[i].messages[messageIndex].isFavorite;
-
+        
         final updatedMessage = _conversations[i].messages[messageIndex].copyWith(
-          isFavorite: newFavoriteStatus,
+          isFavorite: newFavoriteStatus
         );
-
-        // Update the message in the conversation
+        
         final List<Message> updatedMessages = List.from(_conversations[i].messages);
         updatedMessages[messageIndex] = updatedMessage;
-
-        // Create updated conversation
-        _conversations[i] = _conversations[i].copyWith(
-          messages: updatedMessages,
-        );
-
+        
+        _conversations[i] = _conversations[i].copyWith(messages: updatedMessages);
         updated = true;
         break;
       }
@@ -539,22 +533,16 @@ class ConversationProvider with ChangeNotifier {
       for (var i = 0; i < _archivedConversations.length; i++) {
         final messageIndex = _archivedConversations[i].messages.indexWhere((m) => m.id == message.id);
         if (messageIndex != -1) {
-          // Toggle favorite status and save the new status
           newFavoriteStatus = !_archivedConversations[i].messages[messageIndex].isFavorite;
-
+          
           final updatedMessage = _archivedConversations[i].messages[messageIndex].copyWith(
-            isFavorite: newFavoriteStatus,
+            isFavorite: newFavoriteStatus
           );
-
-          // Update the message in the conversation
+          
           final List<Message> updatedMessages = List.from(_archivedConversations[i].messages);
           updatedMessages[messageIndex] = updatedMessage;
-
-          // Create updated conversation
-          _archivedConversations[i] = _archivedConversations[i].copyWith(
-            messages: updatedMessages,
-          );
-
+          
+          _archivedConversations[i] = _archivedConversations[i].copyWith(messages: updatedMessages);
           updated = true;
           break;
         }
@@ -562,16 +550,8 @@ class ConversationProvider with ChangeNotifier {
     }
 
     if (updated) {
-      // Update favorite conversations list
       syncFavoriteConversations();
-
-      // Immediate UI update
       notifyListeners();
-
-      // Schedule delayed update to ensure UI refreshes when returning to screens
-      Future.delayed(const Duration(milliseconds: 100), () {
-        notifyListeners();
-      });
     }
   }
 
