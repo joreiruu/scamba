@@ -272,10 +272,11 @@ Color _getMessageColor(Message message, bool isDarkMode, bool isSelected) {
     final Color hamTextColor = isDarkMode ? Colors.white : Colors.blue[900]!;
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: isSelectionMode 
     ? AppBar(
         automaticallyImplyLeading: false,
-        backgroundColor: isDarkMode ? Colors.black : Colors.white,
+        backgroundColor: Colors.white,
         elevation: 0,
         titleSpacing: 0,
         title: SelectionBar(
@@ -290,6 +291,8 @@ Color _getMessageColor(Message message, bool isDarkMode, bool isSelected) {
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () => Navigator.pop(context),
               ),
+              backgroundColor: Colors.white, // This will make it pure white
+              elevation: 0,
               title: Row(
                 children: [
                   CircleAvatar(

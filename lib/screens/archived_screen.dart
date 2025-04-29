@@ -62,7 +62,7 @@ class ArchivedScreenState extends State<ArchivedScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Archived'),
-        backgroundColor: isDarkMode ? null : const Color(0xFF85BBD9),
+        backgroundColor: Colors.white, // Always white
         actions: selectionMode
             ? [
                 IconButton(

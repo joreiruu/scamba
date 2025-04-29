@@ -141,7 +141,7 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
                     ),
                   ),
             centerTitle: true,
-            backgroundColor: isDarkMode ? Color(0xFF23272A) : Colors.white,
+            backgroundColor: Colors.white, // Always white
             iconTheme: IconThemeData(color: isDarkMode ? Colors.white : Colors.black),
             actions: selectionMode
                 ? [
