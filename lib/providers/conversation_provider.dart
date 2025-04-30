@@ -38,11 +38,40 @@ class ConversationProvider with ChangeNotifier {
   bool _isClassifying = false;
 
   ConversationProvider() {
-    _initializeProvider();
+    // Only load saved states once and initialize properly
+    Future(() async {
+      final prefs = await SharedPreferences.getInstance();
 
-    // Set up SMS listener with immediate classification
-    _subscription = _smsService.conversationsStream.listen((conversations) async {
-      await _updateConversations(conversations);
+         // Check if this is first launch
+      bool isFirstLaunch = prefs.getBool('is_first_launch') ?? true;
+      
+      if (isFirstLaunch) {
+        // Clear any potentially corrupted data
+        await prefs.remove(_archivedIdsKey);
+        await prefs.remove(_deletedIdsKey);
+        await prefs.remove(_readMessageIdsKey);
+        
+        // Mark as no longer first launch
+        await prefs.setBool('is_first_launch', false);
+        
+        // Clear persistence sets
+        _persistentArchivedIds.clear();
+        _persistentDeletedIds.clear();
+        _messageReadStatus.clear();
+      } else {
+        // Load saved states for returning users
+        await _loadArchivedIds();
+        await _loadDeletedIds();
+        await _loadReadStatus();
+      }
+      
+      _isInitialized = true;
+      notifyListeners();
+    });
+
+    // Keep existing subscription
+    _subscription = _smsService.conversationsStream.listen((conversations) {
+      refreshConversations();
     });
 
     // Start periodic refresh
