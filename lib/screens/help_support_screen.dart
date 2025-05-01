@@ -23,9 +23,12 @@ class HelpSupportScreen extends StatelessWidget {
     bool isDarkMode = theme.brightness == Brightness.dark;
 
     return Scaffold(
+      backgroundColor: isDarkMode ? Colors.black : Colors.white,
       appBar: AppBar(
-        title: const Text('Help & Support'),
-        backgroundColor: isDarkMode ? null : const Color(0xFF85BBD9),
+        title: Text('Help & Support',
+          style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87)),
+        backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
+        iconTheme: IconThemeData(color: isDarkMode ? Colors.white : Colors.black87),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),

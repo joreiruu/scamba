@@ -60,9 +60,12 @@ class ArchivedScreenState extends State<ArchivedScreen> {
     bool isDarkMode = theme.brightness == Brightness.dark;
     
     return Scaffold(
+      backgroundColor: isDarkMode ? Colors.black : Colors.white,
       appBar: AppBar(
-        title: const Text('Archived'),
-        backgroundColor: Colors.white, // Always white
+        title: Text('Archived',
+          style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87)),
+        backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
+        iconTheme: IconThemeData(color: isDarkMode ? Colors.white : Colors.black87),
         actions: selectionMode
             ? [
                 IconButton(

@@ -106,6 +106,7 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
         final allConversations = conversationProvider.conversations;
         
         return Scaffold(
+          backgroundColor: isDarkMode ? Colors.black : Colors.white,
           appBar: AppBar(
             leading: selectionMode 
                 ? IconButton(
@@ -119,21 +120,16 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
                   )
                 : null,
             title: selectionMode 
-                ? Row(
-                    mainAxisAlignment: MainAxisAlignment.start, // Align items to the left
-                    children: [
-                      Text(
-                        "${selectedMessages.length} selected",
-                        style: TextStyle(
-                          color: isDarkMode ? Colors.white : Colors.black,
-                        ),
-                      ),
-                    ],
+                ? Text(
+                    "${selectedMessages.length} selected",
+                    style: TextStyle(
+                      color: isDarkMode ? Colors.white : Colors.black87,
+                    ),
                   )
                 : Text(
                     'SCAMBA',
                     style: TextStyle(
-                      color: isDarkMode ? Colors.white : Colors.black,
+                      color: isDarkMode ? Colors.white : Colors.black87,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.5,
@@ -141,8 +137,8 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
                     ),
                   ),
             centerTitle: true,
-            backgroundColor: Colors.white, // Always white
-            iconTheme: IconThemeData(color: isDarkMode ? Colors.white : Colors.black),
+            backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
+            iconTheme: IconThemeData(color: isDarkMode ? Colors.white : Colors.black87),
             actions: selectionMode
                 ? [
                     IconButton(

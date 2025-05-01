@@ -284,26 +284,28 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
     final Color hamTextColor = isDarkMode ? Colors.white : Colors.blue[900]!;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: isDarkMode ? Colors.black : Colors.white,
       appBar: isSelectionMode 
-    ? AppBar(
-        automaticallyImplyLeading: false,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        titleSpacing: 0,
-        title: SelectionBar(
-          selectedMessages: selectedMessages,
-          onCopy: _copySelectedMessages,
-          onCancel: _cancelSelection,
-          onToggleFavorite: _toggleFavoriteAndExitSelection,
-        ),
-      )
+        ? AppBar(
+            automaticallyImplyLeading: false,
+            backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
+            elevation: 0,
+            titleSpacing: 0,
+            iconTheme: IconThemeData(color: isDarkMode ? Colors.white : Colors.black87),
+            title: SelectionBar(
+              selectedMessages: selectedMessages,
+              onCopy: _copySelectedMessages,
+              onCancel: _cancelSelection,
+              onToggleFavorite: _toggleFavoriteAndExitSelection,
+            ),
+          )
           : AppBar(
               leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
+                icon: Icon(Icons.arrow_back, 
+                  color: isDarkMode ? Colors.white : Colors.black87),
                 onPressed: () => Navigator.pop(context),
               ),
-              backgroundColor: Colors.white, // This will make it pure white
+              backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
               elevation: 0,
               title: Row(
                 children: [
