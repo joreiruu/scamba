@@ -55,6 +55,8 @@ flutter_launcher_icons:
   adaptive_icon_background: "#000000"
   adaptive_icon_foreground: "assets/app_icon.png"
   min_sdk_android: 21
+  android_adaptive_icon_padding: true
+  android_adaptive_icon_foreground_scale: 0.5  # Reduced from 0.7 to 0.5
   web:
     generate: true
     image_path: "assets/app_icon.png"
