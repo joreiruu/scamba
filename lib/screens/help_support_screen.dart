@@ -35,7 +35,7 @@ class HelpSupportScreen extends StatelessWidget {
         children: [
           Card(
             child: ExpansionTile(
-              leading: const Icon(Icons.email),
+              leading: const Icon(Icons.email_outlined), // Changed to outlined
               title: const Text('Contact Support'),
               children: [
                 ListTile(
@@ -89,7 +89,7 @@ class HelpSupportScreen extends StatelessWidget {
           const SizedBox(height: 16),
           const Card(
             child: ExpansionTile(
-              leading: Icon(Icons.help_outline),
+              leading: Icon(Icons.help_outline), // Already outlined
               title: Text('FAQs'),
               children: [
                 ListTile(

@@ -132,15 +132,23 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
     showModalBottomSheet(
       context: context,
       builder: (context) {
+        final theme = Theme.of(context);
+        final bool isDarkMode = theme.brightness == Brightness.dark;
+
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
               leading: Icon(
-                isArchived ? Icons.unarchive : Icons.archive,
-                color: Theme.of(context).primaryColor,
+                Icons.archive_outlined,  // Changed to outlined variant
+                color: isDarkMode ? Colors.white : Colors.black87,
               ),
-              title: Text(isArchived ? 'Unarchive' : 'Archive'),
+              title: Text(
+                isArchived ? 'Unarchive' : 'Archive',
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
               onTap: () {
                 if (isArchived) {
                   provider.restoreArchivedConversation(widget.conversation);
@@ -171,8 +179,8 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(
-                Icons.delete,
+              leading: Icon(
+                Icons.delete_outlined,  // Changed to outlined variant
                 color: Colors.red,
               ),
               title: const Text(
@@ -301,7 +309,7 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
           )
           : AppBar(
               leading: IconButton(
-                icon: Icon(Icons.arrow_back, 
+                icon: Icon(Icons.arrow_back_outlined, // Changed to outlined
                   color: isDarkMode ? Colors.white : Colors.black87),
                 onPressed: () => Navigator.pop(context),
               ),
@@ -341,7 +349,7 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
               ),
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.more_vert),
+                  icon: const Icon(Icons.more_vert_outlined),
                   onPressed: () => _showMoreOptions(context),
                 ),
               ],
@@ -437,7 +445,7 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
                                   right: 8,
                                   bottom: 4,
                                   child: Icon(
-                                    Icons.favorite,
+                                    Icons.favorite_outline,
                                     size: 16,
                                     color: Colors.red[400],
                                   ),
@@ -525,7 +533,7 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
         child: Row(
           children: [
             IconButton(
-              icon: Icon(Icons.add, color: isDarkMode ? Colors.white : Colors.black),
+              icon: Icon(Icons.add_outlined, color: isDarkMode ? Colors.white : Colors.black),
               onPressed: () {},
             ),
             Expanded(
@@ -543,7 +551,7 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
               ),
             ),
             IconButton(
-              icon: Icon(Icons.send_sharp, color: isDarkMode ? Colors.white : Colors.black),
+              icon: Icon(Icons.send_outlined, color: isDarkMode ? Colors.white : Colors.black),
               onPressed: () {},
             ),
           ],

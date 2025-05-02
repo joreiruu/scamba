@@ -110,7 +110,7 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
           appBar: AppBar(
             leading: selectionMode 
                 ? IconButton(
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(Icons.close_outlined), // Changed to outlined
                     onPressed: () {
                       setState(() {
                         selectedMessages.clear();
@@ -142,11 +142,13 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
             actions: selectionMode
                 ? [
                     IconButton(
-                      icon: const Icon(Icons.archive_outlined),
+                      icon: Icon(Icons.archive_outlined,
+                        color: isDarkMode ? Colors.white : Colors.black87),
                       onPressed: _archiveSelected,
                     ),
                     IconButton(
-                      icon: const Icon(Icons.delete_outlined),
+                      icon: Icon(Icons.delete_outlined,
+                        color: isDarkMode ? Colors.white : Colors.black87),
                       onPressed: _deleteSelected,
                     ),
                   ]
@@ -267,7 +269,7 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
                         ? Colors.transparent
                         : const Color(0xFF85BBD9),
                 child: isSelected
-                    ? const Icon(Icons.check, color: Colors.white)
+                    ? const Icon(Icons.check_outlined, color: Colors.white) // Changed to outlined
                     : conversation.hasSpamMessages // Use new getter
                         ? ClipOval(
                             child: Image.asset(

@@ -69,7 +69,7 @@ class ArchivedScreenState extends State<ArchivedScreen> {
         actions: selectionMode
             ? [
                 IconButton(
-                  icon: const Icon(Icons.unarchive),
+                  icon: const Icon(Icons.unarchive_outlined), // Changed to outlined
                   onPressed: () {
                     final provider = Provider.of<ConversationProvider>(context, listen: false);
                     for (final id in selectedConversations) {
@@ -84,7 +84,7 @@ class ArchivedScreenState extends State<ArchivedScreen> {
                   },
                 ),
                 IconButton(
-                  icon: const Icon(Icons.delete),
+                  icon: const Icon(Icons.delete_outlined), // Changed to outlined
                   onPressed: () {
                     final provider = Provider.of<ConversationProvider>(context, listen: false);
                     for (final id in selectedConversations) {
