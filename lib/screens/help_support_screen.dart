@@ -39,6 +39,14 @@ class HelpSupportScreen extends StatelessWidget {
               title: const Text('Contact Support'),
               children: [
                 ListTile(
+                  leading: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: CircleAvatar(
+                      backgroundImage: AssetImage('assets/images/leandro.jpg'),
+                      radius: 20,
+                    ),
+                  ),
                   title: const Text('Leandro Abardo'),
                   subtitle: const Text('leandrosambajon.abardo@bicol-u.edu.ph'),
                   onTap: () async {
@@ -54,6 +62,14 @@ class HelpSupportScreen extends StatelessWidget {
                   },
                 ),
                 ListTile(
+                  leading: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: CircleAvatar(
+                      backgroundImage: AssetImage('assets/images/nickol.jpg'),
+                      radius: 20,
+                    ),
+                  ),
                   title: const Text('Nickol Jairo Belgica'),
                   subtitle: const Text('nickoljairobarizo.belgica@bicol-u.edu.ph'),
                   onTap: () async {
@@ -69,6 +85,14 @@ class HelpSupportScreen extends StatelessWidget {
                   },
                 ),
                 ListTile(
+                  leading: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: CircleAvatar(
+                      backgroundImage: AssetImage('assets/images/joriel.jpg'),
+                      radius: 20,
+                    ),
+                  ),
                   title: const Text('Joriel Espinocilla'),
                   subtitle: const Text('jorielogayon.espinocilla@bicol-u.edu.ph'),
                   onTap: () async {

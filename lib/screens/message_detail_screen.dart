@@ -22,6 +22,7 @@ class MessageDetailScreen extends StatefulWidget {
 
 class _MessageDetailScreenState extends State<MessageDetailScreen> {
   final Random _random = Random();
+  final GlobalKey _moreButtonKey = GlobalKey();
   List<Message> selectedMessages = []; // Track selected messages
   bool isSelectionMode = false; // Track if in selection mode
 
@@ -124,77 +125,103 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
     return _random.nextDouble() * 0.8;
   }
 
-  void _showMoreOptions(BuildContext context) {
+  void _showMoreOptions(BuildContext context) async {
     final provider = Provider.of<ConversationProvider>(context, listen: false);
     final isArchived = provider.archivedConversations
         .any((conv) => conv.id == widget.conversation.id);
+    final theme = Theme.of(context);
+    final bool isDarkMode = theme.brightness == Brightness.dark;
 
-    showModalBottomSheet(
+    final RenderBox button = _moreButtonKey.currentContext!.findRenderObject() as RenderBox;
+    final buttonPosition = button.localToGlobal(Offset.zero);
+    
+    // Use fixed width of 160 for consistency across all screens
+    const double menuWidth = 160.0;
+    
+    final double left = buttonPosition.dx + button.size.width - menuWidth;
+    
+    await showMenu(
       context: context,
-      builder: (context) {
-        final theme = Theme.of(context);
-        final bool isDarkMode = theme.brightness == Brightness.dark;
-
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(
-                Icons.archive_outlined,  // Changed to outlined variant
+      position: RelativeRect.fromLTRB(
+        left.clamp(0, MediaQuery.of(context).size.width - menuWidth),
+        buttonPosition.dy + button.size.height,
+        (MediaQuery.of(context).size.width - left - menuWidth).clamp(0, MediaQuery.of(context).size.width),
+        0,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      elevation: 8,
+      color: isDarkMode ? Colors.grey[900] : Colors.white,
+      items: [
+        PopupMenuItem(
+          child: Row(
+            children: [
+              Icon(
+                isArchived ? Icons.unarchive_outlined : Icons.archive_outlined,
                 color: isDarkMode ? Colors.white : Colors.black87,
               ),
-              title: Text(
+              const SizedBox(width: 12),
+              Text(
                 isArchived ? 'Unarchive' : 'Archive',
                 style: TextStyle(
                   color: isDarkMode ? Colors.white : Colors.black87,
                 ),
               ),
-              onTap: () {
-                if (isArchived) {
-                  provider.restoreArchivedConversation(widget.conversation);
-                } else {
-                  provider.archiveConversation(widget.conversation);
-                }
-                Navigator.pop(context); // Close bottom sheet
-                Navigator.pop(context); // Return to previous screen
-
-                // Show snackbar
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(isArchived ? 'Conversation unarchived' : 'Conversation archived'),
-                    backgroundColor: const Color(0xFF85BBD9),
-                    action: SnackBarAction(
-                      label: 'Undo',
-                      onPressed: () {
-                        if (isArchived) {
-                          provider.archiveConversation(widget.conversation);
-                        } else {
-                          provider.restoreArchivedConversation(widget.conversation);
-                        }
-                      },
-                    ),
-                    duration: const Duration(seconds: 5),
+            ],
+          ),
+          onTap: () {
+            if (isArchived) {
+              provider.restoreArchivedConversation(widget.conversation);
+            } else {
+              provider.archiveConversation(widget.conversation);
+            }
+            // Show snackbar after a small delay to allow menu to close
+            Future.delayed(const Duration(milliseconds: 200), () {
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(isArchived ? 'Conversation unarchived' : 'Conversation archived'),
+                  backgroundColor: const Color(0xFF85BBD9),
+                  action: SnackBarAction(
+                    label: 'Undo',
+                    onPressed: () {
+                      if (isArchived) {
+                        provider.archiveConversation(widget.conversation);
+                      } else {
+                        provider.restoreArchivedConversation(widget.conversation);
+                      }
+                    },
                   ),
-                );
-              },
-            ),
-            ListTile(
-              leading: Icon(
-                Icons.delete_outlined,  // Changed to outlined variant
+                  duration: const Duration(seconds: 5),
+                ),
+              );
+            });
+          },
+        ),
+        PopupMenuItem(
+          child: Row(
+            children: const [
+              Icon(
+                Icons.delete_outlined,
                 color: Colors.red,
               ),
-              title: const Text(
+              SizedBox(width: 12),
+              Text(
                 'Delete',
                 style: TextStyle(color: Colors.red),
               ),
-              onTap: () {
-                Navigator.pop(context); // Close bottom sheet
-                _showDeleteConfirmation(context);
-              },
-            ),
-          ],
-        );
-      },
+            ],
+          ),
+          onTap: () {
+            // Show delete confirmation after a small delay to allow menu to close
+            Future.delayed(const Duration(milliseconds: 200), () {
+              if (!context.mounted) return;
+              _showDeleteConfirmation(context);
+            });
+          },
+        ),
+      ],
     );
   }
 
@@ -349,6 +376,7 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
               ),
               actions: [
                 IconButton(
+                  key: _moreButtonKey,
                   icon: const Icon(Icons.more_vert_outlined),
                   onPressed: () => _showMoreOptions(context),
                 ),

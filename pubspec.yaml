@@ -79,6 +79,9 @@ flutter:
     - assets/scamba_logo.png
     - assets/app_icon.png
     - assets/warning_icon.png
+    - assets/images/leandro.jpg
+    - assets/images/nickol.jpg
+    - assets/images/joriel.jpg
 
   # Fonts
   fonts:
