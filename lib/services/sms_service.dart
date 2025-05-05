@@ -79,17 +79,22 @@ class SmsService {
             timestamp: sms.date ?? DateTime.now(),
             isRead: sms.read ?? false,
             isNew: true,
-            isClassified: false, // Ensure new messages are marked as unclassified
+            isClassified: false,
+            isSpam: false,
+            spamConfidence: 0.0,
           );
           
-          _messageCache.putIfAbsent(sender, () => []).insert(0, message);
+          final senderMessages = _messageCache.putIfAbsent(sender, () => []);
+          senderMessages.insert(0, message);
+          senderMessages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
           _processedIds.add(sms.id!);
           hasNewMessages = true;
         }
       }
 
       if (hasNewMessages) {
-        _conversationsController.add(_groupIntoConversations());
+        final conversations = _groupIntoConversations();
+        _conversationsController.add(conversations);
       }
     } catch (e) {
       print('❌ Error refreshing conversations: $e');

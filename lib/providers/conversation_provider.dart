@@ -41,44 +41,111 @@ class ConversationProvider with ChangeNotifier {
     // Only load saved states once and initialize properly
     Future(() async {
       final prefs = await SharedPreferences.getInstance();
-
-         // Check if this is first launch
+      
       bool isFirstLaunch = prefs.getBool('is_first_launch') ?? true;
       
       if (isFirstLaunch) {
-        // Clear any potentially corrupted data
         await prefs.remove(_archivedIdsKey);
         await prefs.remove(_deletedIdsKey);
         await prefs.remove(_readMessageIdsKey);
-        
-        // Mark as no longer first launch
         await prefs.setBool('is_first_launch', false);
-        
-        // Clear persistence sets
-        _persistentArchivedIds.clear();
-        _persistentDeletedIds.clear();
-        _messageReadStatus.clear();
-      } else {
-        // Load saved states for returning users
-        await _loadArchivedIds();
-        await _loadDeletedIds();
-        await _loadReadStatus();
       }
       
+      await _loadArchivedIds();
+      await _loadDeletedIds();
+      await _loadReadStatus();
       _isInitialized = true;
+      
+      // Initialize SMS listener after loading states
+      _initializeSmsListener();
       notifyListeners();
     });
+  }
 
-    // Keep existing subscription
+  void _initializeSmsListener() {
+    // Set up SMS listener with immediate classification
     _subscription = _smsService.conversationsStream.listen((conversations) {
-      refreshConversations();
+      if (conversations != null && conversations.isNotEmpty) {
+        _handleNewConversations(conversations);
+      }
     });
 
     // Start periodic refresh
-    _autoRefreshTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (_) => _smsService.refreshConversations()
+    _autoRefreshTimer = Timer.periodic(refreshInterval, (_) {
+      _smsService.refreshConversations();
+    });
+  }
+
+  Future<void> _handleNewConversations(List<Conversation> newConversations) async {
+    final existingConvs = Map<int, Conversation>.fromEntries(
+      _conversations.map((c) => MapEntry(c.id, c))
     );
+
+    var updatedConvs = <Conversation>[];
+    bool hasChanges = false;
+
+    for (var conv in newConversations) {
+      final existing = existingConvs[conv.id];
+      if (existing != null) {
+        final existingMsgIds = existing.messages.map((m) => m.id).toSet();
+        final newMessages = conv.messages.where((m) => !existingMsgIds.contains(m.id)).toList();
+        
+        if (newMessages.isNotEmpty) {
+          hasChanges = true;
+          final allMessages = [...existing.messages, ...newMessages]
+            ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+          updatedConvs.add(existing.copyWith(messages: allMessages));
+        } else {
+          updatedConvs.add(existing);
+        }
+      } else {
+        hasChanges = true;
+        updatedConvs.add(conv);
+      }
+    }
+
+    if (hasChanges) {
+      _preserveReadStatus(updatedConvs);
+      _updateConversationLists(updatedConvs);
+      await _classifyNewMessages(updatedConvs);
+      notifyListeners();
+    }
+  }
+
+  Future<void> _classifyNewMessages(List<Conversation> conversations) async {
+    if (_isClassifying) return;
+    _isClassifying = true;
+
+    try {
+      for (var conversation in conversations) {
+        final unclassifiedMessages = conversation.messages
+            .where((msg) => !msg.isClassified)
+            .toList();
+
+        for (var message in unclassifiedMessages) {
+          try {
+            final result = await _classifier.classifyMessage(message);
+            if (!result.containsKey('error')) {
+              message.isSpam = result['predicted_class'] == 1;
+              message.spamConfidence = result['confidence'];
+              message.isClassified = true;
+
+              await _db.storeClassification(
+                messageId: message.id.toString(),
+                isSpam: message.isSpam,
+                confidence: message.spamConfidence,
+              );
+              
+              notifyListeners(); // Update UI after each classification
+            }
+          } catch (e) {
+            print('Error classifying message: $e');
+          }
+        }
+      }
+    } finally {
+      _isClassifying = false;
+    }
   }
 
   Future<void> _initializeProvider() async {
