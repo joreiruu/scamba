@@ -156,6 +156,28 @@ class HelpSupportScreen extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+          Card(
+            child: ExpansionTile(
+              leading: const Icon(Icons.privacy_tip_outlined),
+              title: const Text('Privacy Policy'),
+              children: [
+                const ListTile(
+                  title: Text('Message Processing'),
+                  subtitle: Text('• Messages are sent to our server only for real-time classification\n• Our XLM-RoBERTa model processes messages instantly\n• Messages are never saved to disk or database\n• Only classification results and confidence scores are returned'),
+                ),
+                const ListTile(
+                  title: Text('Technical Details'),
+                  subtitle: Text('• Server processes messages through secure API endpoints\n• Only prediction results and timestamps are returned\n• No message logs are maintained\n• Processing happens in-memory only'),
+                ),
+                const ListTile(
+                  title: Text('Data Security'),
+                  subtitle: Text('• All communication is handled through secure endpoints\n• Results include only classification status and confidence scores\n• No message history or user data is retained\n• Server immediately discards message content after classification'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
         ],
       ),
     );
