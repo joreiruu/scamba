@@ -384,13 +384,6 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
             ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Text(
-              _formatDate(widget.conversation.messages.first.timestamp),
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
-            ),
-          ),
           Expanded(
             child: ListView.builder(
               reverse: true, // Add this to make the list start from bottom
