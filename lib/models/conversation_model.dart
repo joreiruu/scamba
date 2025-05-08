@@ -15,6 +15,16 @@ class Conversation {
   DateTime get lastMessageTime => messages.first.timestamp; // Changed from last to first
   int get unreadCount => messages.where((m) => !m.isRead).length;
 
+  bool get hasSpamMessages => messages.any((msg) => msg.isSpam);
+  
+  Message? get lastSpamMessage {
+    try {
+      return messages.firstWhere((msg) => msg.isSpam);
+    } catch (e) {
+      return null;
+    }
+  }
+
   Conversation copyWith({
     int? id,
     String? sender,

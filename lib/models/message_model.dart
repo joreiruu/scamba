@@ -8,6 +8,7 @@ class Message {
   bool isFavorite;
   double spamConfidence;
   bool isClassified;
+  bool isNew;
 
   Message({
     required this.id,
@@ -19,6 +20,7 @@ class Message {
     this.isFavorite = false,
     this.spamConfidence = 0.0,
     this.isClassified = false,
+    this.isNew = false,
   });
 
   Message copyWith({
@@ -27,6 +29,7 @@ class Message {
     bool? isRead,
     bool? isFavorite,
     bool? isClassified,
+    bool? isNew,
   }) {
     return Message(
       id: id,
@@ -38,6 +41,7 @@ class Message {
       isFavorite: isFavorite ?? this.isFavorite,
       spamConfidence: spamConfidence ?? this.spamConfidence,
       isClassified: isClassified ?? this.isClassified,
+      isNew: isNew ?? this.isNew,
     );
   }
 }

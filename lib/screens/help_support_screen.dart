@@ -23,50 +23,161 @@ class HelpSupportScreen extends StatelessWidget {
     bool isDarkMode = theme.brightness == Brightness.dark;
 
     return Scaffold(
+      backgroundColor: isDarkMode ? Colors.black : Colors.white,
       appBar: AppBar(
-        title: const Text('Help & Support'),
-        backgroundColor: isDarkMode ? null : const Color(0xFF85BBD9),
+        title: Text('Help & Support',
+          style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87)),
+        backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
+        iconTheme: IconThemeData(color: isDarkMode ? Colors.white : Colors.black87),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
           Card(
-            child: ListTile(
-              leading: const Icon(Icons.email),
+            child: ExpansionTile(
+              leading: const Icon(Icons.email_outlined), // Changed to outlined
               title: const Text('Contact Support'),
-              subtitle: const Text('support@scamba.com'),
-              onTap: _launchEmail,
+              children: [
+                ListTile(
+                  leading: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: CircleAvatar(
+                      backgroundImage: AssetImage('assets/images/leandro.jpg'),
+                      radius: 20,
+                    ),
+                  ),
+                  title: const Text('Leandro Abardo'),
+                  subtitle: const Text('leandrosambajon.abardo@bicol-u.edu.ph'),
+                  onTap: () async {
+                    final Uri emailUri = Uri(
+                      scheme: 'mailto',
+                      path: 'leandrosambajon.abardo@bicol-u.edu.ph',
+                    );
+                    try {
+                      await launchUrl(emailUri);
+                    } catch (e) {
+                      debugPrint('Could not launch email: $e');
+                    }
+                  },
+                ),
+                ListTile(
+                  leading: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: CircleAvatar(
+                      backgroundImage: AssetImage('assets/images/nickol.jpg'),
+                      radius: 20,
+                    ),
+                  ),
+                  title: const Text('Nickol Jairo Belgica'),
+                  subtitle: const Text('nickoljairobarizo.belgica@bicol-u.edu.ph'),
+                  onTap: () async {
+                    final Uri emailUri = Uri(
+                      scheme: 'mailto',
+                      path: 'nickoljairobarizo.belgica@bicol-u.edu.ph',
+                    );
+                    try {
+                      await launchUrl(emailUri);
+                    } catch (e) {
+                      debugPrint('Could not launch email: $e');
+                    }
+                  },
+                ),
+                ListTile(
+                  leading: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: CircleAvatar(
+                      backgroundImage: AssetImage('assets/images/joriel.jpg'),
+                      radius: 20,
+                    ),
+                  ),
+                  title: const Text('Joriel Espinocilla'),
+                  subtitle: const Text('jorielogayon.espinocilla@bicol-u.edu.ph'),
+                  onTap: () async {
+                    final Uri emailUri = Uri(
+                      scheme: 'mailto',
+                      path: 'jorielogayon.espinocilla@bicol-u.edu.ph',
+                    );
+                    try {
+                      await launchUrl(emailUri);
+                    } catch (e) {
+                      debugPrint('Could not launch email: $e');
+                    }
+                  },
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 16),
           const Card(
             child: ExpansionTile(
-              leading: Icon(Icons.help_outline),
+              leading: Icon(Icons.help_outline), // Already outlined
               title: Text('FAQs'),
               children: [
                 ListTile(
-                  title: Text('How does spam detection work?'),
-                  subtitle: Text('Our app uses machine learning to analyze message patterns and identify potential spam messages.'),
+                  title: Text('How does SCAMBA detect spam messages?'),
+                  subtitle: Text('SCAMBA employs a deep learning model trained to analyze SMS content and classify messages as spam or legitimate.'),
                 ),
                 ListTile(
-                  title: Text('How to report false positives?'),
-                  subtitle: Text('You can mark messages as "Not Spam" by long-pressing the message and selecting the appropriate option.'),
+                  title: Text('Does SCAMBA store my messages?'),
+                  subtitle: Text('No. All message processing occurs locally on your device. Your data remains private and is not shared with external parties without consent.'),
                 ),
                 ListTile(
-                  title: Text('Is my data secure?'),
-                  subtitle: Text('Yes, all message processing is done locally on your device. We do not store your messages on our servers.'),
+                  title: Text('How do I report a misclassified message?'),
+                  subtitle: Text('Contact our support team using the email addresses provided above. We continuously improve our classification model based on feedback.'),
+                ),
+                ListTile(
+                  title: Text('Can I use SCAMBA without internet?'),
+                  subtitle: Text('Yes. SCAMBA supports offline mode with limited functionality. Real-time classification accuracy may be reduced without connection.'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Card(
+            child: ExpansionTile(
+              leading: Icon(Icons.info_outline),
+              title: Text('Core Features'),
+              children: [
+                ListTile(
+                  title: Text('Spam Classification System'),
+                  subtitle: Text('• Spam messages: Marked with a red icon and warning sign\n• Ham messages (legitimate): Marked with a blue icon\n• Message detail view shows a red bubble with confidence bar for spam messages\n• Safe messages appear in a blue bubble'),
+                ),
+                ListTile(
+                  title: Text('Message Management'),
+                  subtitle: Text('• Swipe left: Delete a message\n• Swipe right: Archive a message\n• Long press: Select messages for batch actions\n• Tap: Expand message to view full content'),
+                ),
+                ListTile(
+                  title: Text('Navigation & Customization'),
+                  subtitle: Text('• Dark/Light Mode: Toggle between themes\n• Offline Mode: Limited functionality available\n• Menu Options: Archive, Recently Deleted, Mark All as Read, Favorites'),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
           Card(
-            child: ListTile(
-              leading: const Icon(Icons.bug_report),
-              title: const Text('Report a Bug'),
-              onTap: _launchEmail,
+            child: ExpansionTile(
+              leading: const Icon(Icons.privacy_tip_outlined),
+              title: const Text('Privacy Policy'),
+              children: [
+                const ListTile(
+                  title: Text('Message Processing'),
+                  subtitle: Text('• Messages are sent to our server only for real-time classification\n• Our XLM-RoBERTa model processes messages instantly\n• Messages are never saved to disk or database\n• Only classification results and confidence scores are returned'),
+                ),
+                const ListTile(
+                  title: Text('Technical Details'),
+                  subtitle: Text('• Server processes messages through secure API endpoints\n• Only prediction results and timestamps are returned\n• No message logs are maintained\n• Processing happens in-memory only'),
+                ),
+                const ListTile(
+                  title: Text('Data Security'),
+                  subtitle: Text('• All communication is handled through secure endpoints\n• Results include only classification status and confidence scores\n• No message history or user data is retained\n• Server immediately discards message content after classification'),
+                ),
+              ],
             ),
           ),
+          const SizedBox(height: 16),
         ],
       ),
     );

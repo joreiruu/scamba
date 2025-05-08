@@ -42,7 +42,7 @@ class RecentlyDeletedScreenState extends State<RecentlyDeletedScreen> {
     return Scaffold(
       appBar: AppBar(
   leading: IconButton(
-    icon: Icon(selectionMode ? Icons.close : Icons.arrow_back),
+    icon: Icon(selectionMode ? Icons.close_outlined : Icons.arrow_back_outlined),
     onPressed: () {
       if (selectionMode) {
         setState(() {
@@ -65,7 +65,7 @@ class RecentlyDeletedScreenState extends State<RecentlyDeletedScreen> {
             ),
             const Spacer(),
             IconButton(
-              icon: const Icon(Icons.restore),
+              icon: const Icon(Icons.restore_outlined),
               onPressed: _restoreSelected,
             ),
             IconButton(
@@ -108,7 +108,7 @@ class RecentlyDeletedScreenState extends State<RecentlyDeletedScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.delete_outline,
+              Icons.delete_outline, // Already outlined
               size: 64,
               color: isDarkMode ? Colors.white54 : Colors.black38,
             ),
@@ -147,7 +147,7 @@ class RecentlyDeletedScreenState extends State<RecentlyDeletedScreen> {
                           ? Colors.transparent
                           : const Color(0xFF85BBD9),
                   child: isSelected
-                      ? const Icon(Icons.check, color: Colors.white)
+                      ? const Icon(Icons.check_outlined, color: Colors.white)
                       : conversation.messages.isNotEmpty && conversation.messages.last.isSpam
                           ? ClipOval(
                               child: Image.asset(

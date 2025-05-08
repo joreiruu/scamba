@@ -106,10 +106,11 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
         final allConversations = conversationProvider.conversations;
         
         return Scaffold(
+          backgroundColor: isDarkMode ? Colors.black : Colors.white,
           appBar: AppBar(
             leading: selectionMode 
                 ? IconButton(
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(Icons.close_outlined), // Changed to outlined
                     onPressed: () {
                       setState(() {
                         selectedMessages.clear();
@@ -119,21 +120,16 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
                   )
                 : null,
             title: selectionMode 
-                ? Row(
-                    mainAxisAlignment: MainAxisAlignment.start, // Align items to the left
-                    children: [
-                      Text(
-                        "${selectedMessages.length} selected",
-                        style: TextStyle(
-                          color: isDarkMode ? Colors.white : Colors.black,
-                        ),
-                      ),
-                    ],
+                ? Text(
+                    "${selectedMessages.length} selected",
+                    style: TextStyle(
+                      color: isDarkMode ? Colors.white : Colors.black87,
+                    ),
                   )
                 : Text(
                     'SCAMBA',
                     style: TextStyle(
-                      color: isDarkMode ? Colors.white : Colors.black,
+                      color: isDarkMode ? Colors.white : Colors.black87,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.5,
@@ -141,16 +137,18 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
                     ),
                   ),
             centerTitle: true,
-            backgroundColor: isDarkMode ? Color(0xFF23272A) : Colors.white,
-            iconTheme: IconThemeData(color: isDarkMode ? Colors.white : Colors.black),
+            backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
+            iconTheme: IconThemeData(color: isDarkMode ? Colors.white : Colors.black87),
             actions: selectionMode
                 ? [
                     IconButton(
-                      icon: const Icon(Icons.archive_outlined),
+                      icon: Icon(Icons.archive_outlined,
+                        color: isDarkMode ? Colors.white : Colors.black87),
                       onPressed: _archiveSelected,
                     ),
                     IconButton(
-                      icon: const Icon(Icons.delete_outlined),
+                      icon: Icon(Icons.delete_outlined,
+                        color: isDarkMode ? Colors.white : Colors.black87),
                       onPressed: _deleteSelected,
                     ),
                   ]
@@ -267,12 +265,12 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
               CircleAvatar(
                 backgroundColor: isSelected
                     ? Colors.blue
-                    : conversation.messages.isNotEmpty && conversation.messages.first.isSpam
+                    : conversation.hasSpamMessages // Use new getter
                         ? Colors.transparent
                         : const Color(0xFF85BBD9),
                 child: isSelected
-                    ? const Icon(Icons.check, color: Colors.white)
-                    : conversation.messages.isNotEmpty && conversation.messages.first.isSpam
+                    ? const Icon(Icons.check_outlined, color: Colors.white) // Changed to outlined
+                    : conversation.hasSpamMessages // Use new getter
                         ? ClipOval(
                             child: Image.asset(
                               'assets/warning_icon.png',

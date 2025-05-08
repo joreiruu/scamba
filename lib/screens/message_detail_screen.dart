@@ -22,6 +22,7 @@ class MessageDetailScreen extends StatefulWidget {
 
 class _MessageDetailScreenState extends State<MessageDetailScreen> {
   final Random _random = Random();
+  final GlobalKey _moreButtonKey = GlobalKey();
   List<Message> selectedMessages = []; // Track selected messages
   bool isSelectionMode = false; // Track if in selection mode
 
@@ -68,7 +69,7 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
     });
   }
 
-   void _handleLongPress(Message message) {
+  void _handleLongPress(Message message) {
     setState(() {
       isSelectionMode = true;
       if (!selectedMessages.contains(message)) {
@@ -77,40 +78,39 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
     });
   }
 
-   // Add a method to handle message selection/deselection
   void _toggleMessageSelection(Message message) {
-  setState(() {
-    if (selectedMessages.contains(message)) {
-      selectedMessages.remove(message);
-      if (selectedMessages.isEmpty) {
-        isSelectionMode = false; // Exit selection mode if no messages selected
+    setState(() {
+      if (selectedMessages.contains(message)) {
+        selectedMessages.remove(message);
+        if (selectedMessages.isEmpty) {
+          isSelectionMode = false; // Exit selection mode if no messages selected
+        }
+      } else {
+        selectedMessages.add(message);
       }
-    } else {
-      selectedMessages.add(message);
-    }
-  });
-}
+    });
+  }
 
-   void _cancelSelection() {
+  void _cancelSelection() {
     setState(() {
       selectedMessages.clear();
       isSelectionMode = false;
     });
   }
 
-   void _copySelectedMessages() {
+  void _copySelectedMessages() {
     final String textToCopy = selectedMessages
         .map((message) => message.content)
         .join('\n\n');
     Clipboard.setData(ClipboardData(text: textToCopy));
     
     // Show a snackbar to confirm
-  ScaffoldMessenger.of(context).showSnackBar(
-  const SnackBar(
-    content: Text('Copied to clipboard'),
-    backgroundColor: Color(0xFF85BBD9), // Custom background color
-  ),
-);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Copied to clipboard'),
+        backgroundColor: Color(0xFF85BBD9), // Custom background color
+      ),
+    );
     
     _cancelSelection(); // Exit selection mode after copying
   }
@@ -125,33 +125,60 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
     return _random.nextDouble() * 0.8;
   }
 
-  void _showMoreOptions(BuildContext context) {
-  final provider = Provider.of<ConversationProvider>(context, listen: false);
-  final isArchived = provider.archivedConversations
-      .any((conv) => conv.id == widget.conversation.id);
+  void _showMoreOptions(BuildContext context) async {
+    final provider = Provider.of<ConversationProvider>(context, listen: false);
+    final isArchived = provider.archivedConversations
+        .any((conv) => conv.id == widget.conversation.id);
+    final theme = Theme.of(context);
+    final bool isDarkMode = theme.brightness == Brightness.dark;
 
-  showModalBottomSheet(
-    context: context,
-    builder: (context) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: Icon(
-              isArchived ? Icons.unarchive : Icons.archive,
-              color: Theme.of(context).primaryColor,
-            ),
-            title: Text(isArchived ? 'Unarchive' : 'Archive'),
-            onTap: () {
-              if (isArchived) {
-                provider.restoreArchivedConversation(widget.conversation);
-              } else {
-                provider.archiveConversation(widget.conversation);
-              }
-              Navigator.pop(context); // Close bottom sheet
-              Navigator.pop(context); // Return to previous screen
-
-              // Show snackbar
+    final RenderBox button = _moreButtonKey.currentContext!.findRenderObject() as RenderBox;
+    final buttonPosition = button.localToGlobal(Offset.zero);
+    
+    // Use fixed width of 160 for consistency across all screens
+    const double menuWidth = 160.0;
+    
+    final double left = buttonPosition.dx + button.size.width - menuWidth;
+    
+    await showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        left.clamp(0, MediaQuery.of(context).size.width - menuWidth),
+        buttonPosition.dy + button.size.height,
+        (MediaQuery.of(context).size.width - left - menuWidth).clamp(0, MediaQuery.of(context).size.width),
+        0,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      elevation: 8,
+      color: isDarkMode ? Colors.grey[900] : Colors.white,
+      items: [
+        PopupMenuItem(
+          child: Row(
+            children: [
+              Icon(
+                isArchived ? Icons.unarchive_outlined : Icons.archive_outlined,
+                color: isDarkMode ? Colors.white : Colors.black87,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                isArchived ? 'Unarchive' : 'Archive',
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          onTap: () {
+            if (isArchived) {
+              provider.restoreArchivedConversation(widget.conversation);
+            } else {
+              provider.archiveConversation(widget.conversation);
+            }
+            // Show snackbar after a small delay to allow menu to close
+            Future.delayed(const Duration(milliseconds: 200), () {
+              if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(isArchived ? 'Conversation unarchived' : 'Conversation archived'),
@@ -169,98 +196,118 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
                   duration: const Duration(seconds: 5),
                 ),
               );
-            },
-          ),
-          ListTile(
-            leading: const Icon(
-              Icons.delete,
-              color: Colors.red,
-            ),
-            title: const Text(
-              'Delete',
-              style: TextStyle(color: Colors.red),
-            ),
-            onTap: () {
-              Navigator.pop(context); // Close bottom sheet
-              _showDeleteConfirmation(context);
-            },
-          ),
-        ],
-      );
-    },
-  );
-}
-
-void _showDeleteConfirmation(BuildContext context) {
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Delete Conversation'),
-      content: const Text('Are you sure you want to delete this conversation? This can be undone from Recently Deleted.'),
-      actions: [
-        TextButton(
-          child: const Text('Cancel'),
-          onPressed: () => Navigator.pop(context),
+            });
+          },
         ),
-        TextButton(
-          child: const Text(
-            'Delete',
-            style: TextStyle(color: Colors.red),
-          ),
-          onPressed: () {
-            final provider = Provider.of<ConversationProvider>(context, listen: false);
-            provider.deleteConversation(widget.conversation);
-            Navigator.pop(context); // Close dialog
-            Navigator.pop(context); // Return to previous screen
-            
-            // Show snackbar with undo option
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('Conversation deleted'),
-                backgroundColor: const Color(0xFF85BBD9),
-                action: SnackBarAction(
-                  label: 'Undo',
-                  onPressed: () {
-                    provider.restoreDeletedConversation(widget.conversation);
-                  },
-                ),
-                duration: const Duration(seconds: 5),
+        PopupMenuItem(
+          child: Row(
+            children: const [
+              Icon(
+                Icons.delete_outlined,
+                color: Colors.red,
               ),
-            );
+              SizedBox(width: 12),
+              Text(
+                'Delete',
+                style: TextStyle(color: Colors.red),
+              ),
+            ],
+          ),
+          onTap: () {
+            // Show delete confirmation after a small delay to allow menu to close
+            Future.delayed(const Duration(milliseconds: 200), () {
+              if (!context.mounted) return;
+              _showDeleteConfirmation(context);
+            });
           },
         ),
       ],
-    ),
-  );
-}
-
-void _toggleFavoriteAndExitSelection(Message message) {
-  // Toggle favorite status using provider
-  Provider.of<ConversationProvider>(context, listen: false)
-      .toggleMessageFavorite(message);
-      
-  // Exit selection mode
-  setState(() {
-    selectedMessages.clear();
-    isSelectionMode = false;
-  });
-}
-
-Color _getMessageColor(Message message, bool isDarkMode, bool isSelected) {
-  if (isSelected) {
-    return Color.fromRGBO(33, 150, 243, 0.3);
+    );
   }
-  
-  if (!message.isClassified) {
-    return isDarkMode ? Colors.grey[800]! : Colors.grey[300]!;
-  }
-  
-  return message.isSpam 
-      ? (isDarkMode ? Colors.red[900]! : Colors.red[100]!)
-      : (isDarkMode ? Colors.blueGrey[800]! : Colors.blue[100]!);
-}
 
-   @override
+  void _showDeleteConfirmation(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Conversation'),
+        content: const Text('Are you sure you want to delete this conversation? This can be undone from Recently Deleted.'),
+        actions: [
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.pop(context),
+          ),
+          TextButton(
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red),
+            ),
+            onPressed: () {
+              final provider = Provider.of<ConversationProvider>(context, listen: false);
+              provider.deleteConversation(widget.conversation);
+              Navigator.pop(context); // Close dialog
+              Navigator.pop(context); // Return to previous screen
+              
+              // Show snackbar with undo option
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Conversation deleted'),
+                  backgroundColor: const Color(0xFF85BBD9),
+                  action: SnackBarAction(
+                    label: 'Undo',
+                    onPressed: () {
+                      provider.restoreDeletedConversation(widget.conversation);
+                    },
+                  ),
+                  duration: const Duration(seconds: 5),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _toggleFavoriteAndExitSelection(Message message) {
+    final provider = Provider.of<ConversationProvider>(context, listen: false);
+    provider.toggleMessageFavorite(message);
+
+    // Show snackbar feedback
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message.isFavorite ? 'Removed from favorites' : 'Added to favorites',
+        ),
+        duration: const Duration(seconds: 2),
+        backgroundColor: const Color(0xFF85BBD9),
+      ),
+    );
+    
+    setState(() {
+      selectedMessages.clear();
+      isSelectionMode = false;
+    });
+  }
+
+  Color _getMessageColor(Message message, bool isDarkMode, bool isSelected) {
+    if (isSelected) {
+      return Color.fromRGBO(33, 150, 243, 0.3);
+    }
+    
+    if (message.isFavorite) {
+      return isDarkMode ? Colors.pink[900]! : Colors.pink[50]!;
+    }
+    
+    if (!message.isClassified) {
+      return isDarkMode ? Colors.grey[800]! : Colors.grey[300]!;
+    }
+    
+    return message.isSpam 
+        ? (isDarkMode ? Colors.red[900]! : Colors.red[100]!)
+        : (isDarkMode ? Colors.blue[900]! : Colors.blue[50]!);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bool isDarkMode = theme.brightness == Brightness.dark;
@@ -272,24 +319,29 @@ Color _getMessageColor(Message message, bool isDarkMode, bool isSelected) {
     final Color hamTextColor = isDarkMode ? Colors.white : Colors.blue[900]!;
 
     return Scaffold(
+      backgroundColor: isDarkMode ? Colors.black : Colors.white,
       appBar: isSelectionMode 
-    ? AppBar(
-        automaticallyImplyLeading: false,
-        backgroundColor: isDarkMode ? Colors.black : Colors.white,
-        elevation: 0,
-        titleSpacing: 0,
-        title: SelectionBar(
-  selectedMessages: selectedMessages,
-  onCopy: _copySelectedMessages,
-  onCancel: _cancelSelection,
-  onToggleFavorite: _toggleFavoriteAndExitSelection,
-),
-      )
+        ? AppBar(
+            automaticallyImplyLeading: false,
+            backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
+            elevation: 0,
+            titleSpacing: 0,
+            iconTheme: IconThemeData(color: isDarkMode ? Colors.white : Colors.black87),
+            title: SelectionBar(
+              selectedMessages: selectedMessages,
+              onCopy: _copySelectedMessages,
+              onCancel: _cancelSelection,
+              onToggleFavorite: _toggleFavoriteAndExitSelection,
+            ),
+          )
           : AppBar(
               leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
+                icon: Icon(Icons.arrow_back_outlined, // Changed to outlined
+                  color: isDarkMode ? Colors.white : Colors.black87),
                 onPressed: () => Navigator.pop(context),
               ),
+              backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
+              elevation: 0,
               title: Row(
                 children: [
                   CircleAvatar(
@@ -324,20 +376,14 @@ Color _getMessageColor(Message message, bool isDarkMode, bool isSelected) {
               ),
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.more_vert),
+                  key: _moreButtonKey,
+                  icon: const Icon(Icons.more_vert_outlined),
                   onPressed: () => _showMoreOptions(context),
                 ),
               ],
             ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Text(
-              _formatDate(widget.conversation.messages.first.timestamp),
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
-            ),
-          ),
           Expanded(
             child: ListView.builder(
               reverse: true, // Add this to make the list start from bottom
@@ -420,7 +466,7 @@ Color _getMessageColor(Message message, bool isDarkMode, bool isSelected) {
                                   right: 8,
                                   bottom: 4,
                                   child: Icon(
-                                    Icons.favorite,
+                                    Icons.favorite_outline,
                                     size: 16,
                                     color: Colors.red[400],
                                   ),
@@ -508,7 +554,7 @@ Color _getMessageColor(Message message, bool isDarkMode, bool isSelected) {
         child: Row(
           children: [
             IconButton(
-              icon: Icon(Icons.add, color: isDarkMode ? Colors.white : Colors.black),
+              icon: Icon(Icons.add_outlined, color: isDarkMode ? Colors.white : Colors.black),
               onPressed: () {},
             ),
             Expanded(
@@ -526,7 +572,7 @@ Color _getMessageColor(Message message, bool isDarkMode, bool isSelected) {
               ),
             ),
             IconButton(
-              icon: Icon(Icons.send_sharp, color: isDarkMode ? Colors.white : Colors.black),
+              icon: Icon(Icons.send_outlined, color: isDarkMode ? Colors.white : Colors.black),
               onPressed: () {},
             ),
           ],

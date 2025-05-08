@@ -24,6 +24,7 @@ class ConversationProvider with ChangeNotifier {
 
   static const refreshInterval = Duration(seconds: 5);
   Timer? _autoRefreshTimer;
+  Timer? _newMessageCheckTimer;
 
   // Add these keys for SharedPreferences
   static const String _archivedIdsKey = 'archived_conversation_ids';
@@ -38,30 +39,89 @@ class ConversationProvider with ChangeNotifier {
   bool _isClassifying = false;
 
   ConversationProvider() {
-<<<<<<< HEAD
-    // Only load saved states once
-    Future(() async {
-      await _loadArchivedIds();
-      await _loadDeletedIds();
-      await _loadReadStatus();
-      notifyListeners();
-    });
-
-    // Listen to SMS updates
-    _subscription = _smsService.conversationsStream.listen((conversations) {
-      refreshConversations();
-=======
     // Initial load and classification
     _initializeProvider();
 
-    // Setup periodic refresh
-    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
-      await _smsService.refreshConversations();
+    // Start periodic refresh
+    _autoRefreshTimer = Timer.periodic(refreshInterval, (_) {
+      _smsService.refreshConversations();
     });
   }
 
+  Future<void> _handleNewConversations(List<Conversation> newConversations) async {
+    final existingConvs = Map<int, Conversation>.fromEntries(
+      _conversations.map((c) => MapEntry(c.id, c))
+    );
+
+    var updatedConvs = <Conversation>[];
+    bool hasChanges = false;
+
+    for (var conv in newConversations) {
+      final existing = existingConvs[conv.id];
+      if (existing != null) {
+        final existingMsgIds = existing.messages.map((m) => m.id).toSet();
+        final newMessages = conv.messages.where((m) => !existingMsgIds.contains(m.id)).toList();
+        
+        if (newMessages.isNotEmpty) {
+          hasChanges = true;
+          final allMessages = [...existing.messages, ...newMessages]
+            ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+          updatedConvs.add(existing.copyWith(messages: allMessages));
+        } else {
+          updatedConvs.add(existing);
+        }
+      } else {
+        hasChanges = true;
+        updatedConvs.add(conv);
+      }
+    }
+
+    if (hasChanges) {
+      _preserveReadStatus(updatedConvs);
+      _updateConversationLists(updatedConvs);
+      await _classifyNewMessages(updatedConvs);
+      notifyListeners();
+    }
+  }
+
+  Future<void> _classifyNewMessages(List<Conversation> conversations) async {
+    if (_isClassifying) return;
+    _isClassifying = true;
+
+    try {
+      for (var conversation in conversations) {
+        final unclassifiedMessages = conversation.messages
+            .where((msg) => !msg.isClassified)
+            .toList();
+
+        for (var message in unclassifiedMessages) {
+          try {
+            final result = await _classifier.classifyMessage(message);
+            if (!result.containsKey('error')) {
+              message.isSpam = result['predicted_class'] == 1;
+              message.spamConfidence = result['confidence'];
+              message.isClassified = true;
+
+              await _db.storeClassification(
+                messageId: message.id.toString(),
+                isSpam: message.isSpam,
+                confidence: message.spamConfidence,
+              );
+              
+              notifyListeners(); // Update UI after each classification
+            }
+          } catch (e) {
+            print('Error classifying message: $e');
+          }
+        }
+      }
+    } finally {
+      _isClassifying = false;
+    }
+  }
+
   Future<void> _initializeProvider() async {
-    await _loadArchivedIds();
+    await _loadReadStatus();
     await _loadDeletedIds();
     await _loadReadStatus();
 
@@ -72,7 +132,6 @@ class ConversationProvider with ChangeNotifier {
     // Listen for updates
     _subscription = _smsService.conversationsStream.listen((conversations) async {
       await _updateConversations(conversations);
->>>>>>> test
     });
   }
 
@@ -83,7 +142,7 @@ class ConversationProvider with ChangeNotifier {
     );
 
     // Update conversations while preserving states
-    final updatedConversations = newConversations.map((conv) {
+    _conversations = newConversations.map((conv) {
       return conv.copyWith(
         messages: conv.messages.map((msg) {
           final existing = existingMessages[msg.id];
@@ -100,18 +159,47 @@ class ConversationProvider with ChangeNotifier {
       );
     }).toList();
 
-    // Classify any new unclassified messages
-    final unclassifiedConversations = updatedConversations.where((conv) => 
-      conv.messages.any((msg) => !msg.isClassified)
-    ).toList();
+    // Immediately start classification for new messages
+    final newMessages = _conversations
+        .expand((conv) => conv.messages)
+        .where((msg) => msg.isNew && !msg.isClassified)
+        .toList();
 
-    if (unclassifiedConversations.isNotEmpty) {
-      await classifyMessagesInBackground(unclassifiedConversations);
+    if (newMessages.isNotEmpty) {
+      for (var message in newMessages) {
+        try {
+          final result = await _classifier.classifyMessage(message);
+          if (!result.containsKey('error')) {
+            message.isSpam = result['predicted_class'] == 1;
+            message.spamConfidence = result['confidence'];
+            message.isClassified = true;
+
+            await _db.storeClassification(
+              messageId: message.id.toString(),
+              isSpam: message.isSpam,
+              confidence: message.spamConfidence,
+            );
+
+            // Force UI update after each classification
+            notifyListeners();
+          }
+        } catch (e) {
+          print('Error classifying message: $e');
+        }
+      }
     }
 
-    // Update conversation lists while preserving states
-    _updateConversationLists(updatedConversations);
+    // Final UI update
     notifyListeners();
+  }
+
+  Future<void> _loadClassificationForMessage(Message message) async {
+    final storedClassification = await _db.getClassification(message.id.toString());
+    if (storedClassification != null) {
+      message.isSpam = storedClassification['is_spam'] == 1;
+      message.spamConfidence = storedClassification['confidence'];
+      message.isClassified = true;
+    }
   }
 
   void _updateConversationLists(List<Conversation> conversations) {
@@ -186,7 +274,7 @@ class ConversationProvider with ChangeNotifier {
     }
 
     notifyListeners();
-    
+
     // Only classify unclassified messages
     classifyMessagesInBackground(newConversations);
   }
@@ -225,36 +313,13 @@ class ConversationProvider with ChangeNotifier {
     _isClassifying = true;
 
     try {
-      // Only get conversations with unclassified messages
-      final conversationsToProcess = conversations.where((conv) => 
-        conv.messages.any((msg) => !msg.isClassified)
-      ).toList();
-
-      if (conversationsToProcess.isEmpty) {
-        print('✅ All messages are already classified');
-        return;
-      }
-
-      // Sort conversations by most recent message first
-      conversationsToProcess.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
-
-      for (var conversation in conversationsToProcess) {
-        print('📱 Processing conversation from: ${conversation.sender}');
-        
-        // Only get unclassified messages
+      for (var conversation in conversations) {
         final unclassifiedMessages = conversation.messages
             .where((msg) => !msg.isClassified)
             .toList();
 
-        if (unclassifiedMessages.isEmpty) continue;
-
-        print('🔄 Classifying ${unclassifiedMessages.length} messages from ${conversation.sender}');
-        
         for (var message in unclassifiedMessages) {
-          print('  └─ Classifying message: "${message.content.substring(0, min(30, message.content.length))}..."');
-          
           final result = await _classifier.classifyMessage(message);
-          
           if (!result.containsKey('error')) {
             message.isSpam = result['predicted_class'] == 1;
             message.spamConfidence = result['confidence'];
@@ -265,14 +330,13 @@ class ConversationProvider with ChangeNotifier {
               isSpam: message.isSpam,
               confidence: message.spamConfidence,
             );
+
+            notifyListeners(); // Update UI after each classification
           }
         }
       }
-
-      notifyListeners();
     } finally {
       _isClassifying = false;
-      print('🏁 Classification process completed');
     }
   }
 
@@ -296,13 +360,13 @@ class ConversationProvider with ChangeNotifier {
     if (!_persistentArchivedIds.contains(conversation.id)) {
       // First remove from main conversations to prevent duplication
       _conversations.removeWhere((conv) => conv.id == conversation.id);
-      
+
       // Only add to archived if not already present
       if (!_archivedConversations.any((conv) => conv.id == conversation.id)) {
         _persistentArchivedIds.add(conversation.id);
         _archivedConversations.add(conversation);
       }
-      
+
       _saveArchivedIds().then((_) {
         notifyListeners();
       });
@@ -331,14 +395,14 @@ class ConversationProvider with ChangeNotifier {
         final insertIndex = _conversations.indexWhere(
           (conv) => conv.lastMessageTime.compareTo(conversation.lastMessageTime) < 0
         );
-        
+
         if (insertIndex == -1) {
           _conversations.insert(0, conversation); // Add to beginning if newest
         } else {
           _conversations.insert(insertIndex, conversation);
         }
       }
-      
+
       _saveDeletedIds();
       notifyListeners();
     }
@@ -348,21 +412,21 @@ class ConversationProvider with ChangeNotifier {
     if (_persistentArchivedIds.contains(conversation.id)) {
       _persistentArchivedIds.remove(conversation.id);
       _archivedConversations.removeWhere((conv) => conv.id == conversation.id);
-      
+
       // Check if conversation already exists to prevent duplicates
       if (!_conversations.any((conv) => conv.id == conversation.id)) {
         // Insert the conversation in the correct chronological position
         final insertIndex = _conversations.indexWhere(
           (conv) => conv.lastMessageTime.compareTo(conversation.lastMessageTime) < 0
         );
-        
+
         if (insertIndex == -1) {
           _conversations.insert(0, conversation); // Add to beginning if newest
         } else {
           _conversations.insert(insertIndex, conversation);
         }
       }
-      
+
       _saveArchivedIds();
       notifyListeners();
     }
@@ -380,18 +444,18 @@ class ConversationProvider with ChangeNotifier {
     // Remove old references to prevent duplicates
     _archivedConversations.removeWhere((conv) => conv.id == conversation.id);
     _conversations.removeWhere((conv) => conv.id == conversation.id);
-    
+
     // Insert the conversation in the correct chronological position
     final insertIndex = _conversations.indexWhere(
       (conv) => conv.lastMessageTime.compareTo(conversation.lastMessageTime) < 0
     );
-    
+
     if (insertIndex == -1) {
       _conversations.insert(0, conversation); // Add to beginning if newest
     } else {
       _conversations.insert(insertIndex, conversation);
     }
-    
+
     notifyListeners();
   }
 
@@ -410,7 +474,7 @@ class ConversationProvider with ChangeNotifier {
   }
 
   // Mark all messages in a conversation as read
-  void markConversationAsRead(Conversation conversation) {
+  Future<void> markConversationAsRead(Conversation conversation) async {
     bool changed = false;
     for (var message in conversation.messages) {
       if (!message.isRead) {
@@ -421,14 +485,12 @@ class ConversationProvider with ChangeNotifier {
     }
 
     if (changed) {
-      _saveReadStatus().then((_) {
-        print('Read status saved for conversation ${conversation.id}'); // Debug log
-        notifyListeners();
-      });
+      await _saveReadStatus(); // Wait for save to complete
+      notifyListeners();
     }
   }
 
-  void markAllAsRead() {
+  Future<void> markAllAsRead() async {
     bool anyChanges = false;
 
     // Mark messages as read in main conversations
@@ -454,7 +516,7 @@ class ConversationProvider with ChangeNotifier {
     }
 
     if (anyChanges) {
-      _saveReadStatus(); // Save read status immediately
+      await _saveReadStatus(); // Wait for save to complete
       notifyListeners();
     }
   }
@@ -504,27 +566,21 @@ class ConversationProvider with ChangeNotifier {
   void toggleMessageFavorite(Message message) {
     bool updated = false;
     bool newFavoriteStatus = false;
-
-    // Check all conversations
+    
+    // Check active conversations
     for (var i = 0; i < _conversations.length; i++) {
       final messageIndex = _conversations[i].messages.indexWhere((m) => m.id == message.id);
       if (messageIndex != -1) {
-        // Toggle favorite status and save the new status
         newFavoriteStatus = !_conversations[i].messages[messageIndex].isFavorite;
-
+        
         final updatedMessage = _conversations[i].messages[messageIndex].copyWith(
-          isFavorite: newFavoriteStatus,
+          isFavorite: newFavoriteStatus
         );
-
-        // Update the message in the conversation
+        
         final List<Message> updatedMessages = List.from(_conversations[i].messages);
         updatedMessages[messageIndex] = updatedMessage;
-
-        // Create updated conversation
-        _conversations[i] = _conversations[i].copyWith(
-          messages: updatedMessages,
-        );
-
+        
+        _conversations[i] = _conversations[i].copyWith(messages: updatedMessages);
         updated = true;
         break;
       }
@@ -535,22 +591,16 @@ class ConversationProvider with ChangeNotifier {
       for (var i = 0; i < _archivedConversations.length; i++) {
         final messageIndex = _archivedConversations[i].messages.indexWhere((m) => m.id == message.id);
         if (messageIndex != -1) {
-          // Toggle favorite status and save the new status
           newFavoriteStatus = !_archivedConversations[i].messages[messageIndex].isFavorite;
-
+          
           final updatedMessage = _archivedConversations[i].messages[messageIndex].copyWith(
-            isFavorite: newFavoriteStatus,
+            isFavorite: newFavoriteStatus
           );
-
-          // Update the message in the conversation
+          
           final List<Message> updatedMessages = List.from(_archivedConversations[i].messages);
           updatedMessages[messageIndex] = updatedMessage;
-
-          // Create updated conversation
-          _archivedConversations[i] = _archivedConversations[i].copyWith(
-            messages: updatedMessages,
-          );
-
+          
+          _archivedConversations[i] = _archivedConversations[i].copyWith(messages: updatedMessages);
           updated = true;
           break;
         }
@@ -558,16 +608,8 @@ class ConversationProvider with ChangeNotifier {
     }
 
     if (updated) {
-      // Update favorite conversations list
       syncFavoriteConversations();
-
-      // Immediate UI update
       notifyListeners();
-
-      // Schedule delayed update to ensure UI refreshes when returning to screens
-      Future.delayed(const Duration(milliseconds: 100), () {
-        notifyListeners();
-      });
     }
   }
 
@@ -669,30 +711,6 @@ class ConversationProvider with ChangeNotifier {
     }
   }
 
-  Future<void> _loadReadStatus() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final String? readStatusJson = prefs.getString(_readMessageIdsKey);
-      print('Loaded read status: $readStatusJson'); // Debug log
-
-      if (readStatusJson != null) {
-        final Map<String, dynamic> readStatus = jsonDecode(readStatusJson);
-        _messageReadStatus.clear();
-
-        // Convert string keys back to int
-        readStatus.forEach((key, value) {
-          _messageReadStatus[int.parse(key)] = value;
-        });
-
-        // Apply read status to all conversations
-        _applyReadStatus(_conversations);
-        _applyReadStatus(_archivedConversations);
-      }
-    } catch (e) {
-      print('Error loading read status: $e');
-    }
-  }
-
   // Add helper method to apply read status
   void _applyReadStatus(List<Conversation> conversations) {
     for (var conv in conversations) {
@@ -704,8 +722,15 @@ class ConversationProvider with ChangeNotifier {
     }
   }
 
+  // For manual full refresh
+  Future<void> forceFullRefresh() async {
+    final conversations = await _smsService.getConversations(loadMore: false);
+    await _updateConversations(conversations);
+  }
+
   @override
   void dispose() {
+    _newMessageCheckTimer?.cancel();
     _subscription?.cancel();
     _autoRefreshTimer?.cancel();
     super.dispose();

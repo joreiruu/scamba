@@ -60,13 +60,16 @@ class ArchivedScreenState extends State<ArchivedScreen> {
     bool isDarkMode = theme.brightness == Brightness.dark;
     
     return Scaffold(
+      backgroundColor: isDarkMode ? Colors.black : Colors.white,
       appBar: AppBar(
-        title: const Text('Archived'),
-        backgroundColor: isDarkMode ? null : const Color(0xFF85BBD9),
+        title: Text('Archived',
+          style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87)),
+        backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
+        iconTheme: IconThemeData(color: isDarkMode ? Colors.white : Colors.black87),
         actions: selectionMode
             ? [
                 IconButton(
-                  icon: const Icon(Icons.unarchive),
+                  icon: const Icon(Icons.unarchive_outlined), // Changed to outlined
                   onPressed: () {
                     final provider = Provider.of<ConversationProvider>(context, listen: false);
                     for (final id in selectedConversations) {
@@ -81,7 +84,7 @@ class ArchivedScreenState extends State<ArchivedScreen> {
                   },
                 ),
                 IconButton(
-                  icon: const Icon(Icons.delete),
+                  icon: const Icon(Icons.delete_outlined), // Changed to outlined
                   onPressed: () {
                     final provider = Provider.of<ConversationProvider>(context, listen: false);
                     for (final id in selectedConversations) {
