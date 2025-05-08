@@ -33,14 +33,42 @@ class ConversationProvider with ChangeNotifier {
 
   // Add flags to track initial load
   bool _isInitialized = false;
-  bool _isInitializing = false;
   final Set<int> _persistentArchivedIds = {};
   final Set<int> _persistentDeletedIds = {};
   bool _isClassifying = false;
 
   ConversationProvider() {
-    // Initial load and classification
-    _initializeProvider();
+    // Only load saved states once and initialize properly
+    Future(() async {
+      final prefs = await SharedPreferences.getInstance();
+      
+      bool isFirstLaunch = prefs.getBool('is_first_launch') ?? true;
+      
+      if (isFirstLaunch) {
+        await prefs.remove(_archivedIdsKey);
+        await prefs.remove(_deletedIdsKey);
+        await prefs.remove(_readMessageIdsKey);
+        await prefs.setBool('is_first_launch', false);
+      }
+      
+      await _loadArchivedIds();
+      await _loadDeletedIds();
+      await _loadReadStatus();
+      _isInitialized = true;
+      
+      // Initialize SMS listener after loading states
+      _initializeSmsListener();
+      notifyListeners();
+    });
+  }
+
+  void _initializeSmsListener() {
+    // Set up SMS listener with immediate classification
+    _subscription = _smsService.conversationsStream.listen((conversations) {
+      if (conversations != null && conversations.isNotEmpty) {
+        _handleNewConversations(conversations);
+      }
+    });
 
     // Start periodic refresh
     _autoRefreshTimer = Timer.periodic(refreshInterval, (_) {
@@ -123,16 +151,28 @@ class ConversationProvider with ChangeNotifier {
   Future<void> _initializeProvider() async {
     await _loadReadStatus();
     await _loadDeletedIds();
-    await _loadReadStatus();
+    notifyListeners();
+  }
 
-    // Get initial messages
-    final initialConversations = await _smsService.getConversations();
-    await loadConversations(initialConversations);
+  Future<void> _loadReadStatus() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? readStatusJson = prefs.getString(_readMessageIdsKey);
 
-    // Listen for updates
-    _subscription = _smsService.conversationsStream.listen((conversations) async {
-      await _updateConversations(conversations);
-    });
+      if (readStatusJson != null) {
+        final Map<String, dynamic> readStatus = jsonDecode(readStatusJson);
+        _messageReadStatus.clear();
+        readStatus.forEach((key, value) {
+          _messageReadStatus[int.parse(key)] = value as bool;
+        });
+
+        // Apply read status to existing conversations
+        _applyReadStatus(_conversations);
+        _applyReadStatus(_archivedConversations);
+      }
+    } catch (e) {
+      print('Error loading read status: $e');
+    }
   }
 
   Future<void> _updateConversations(List<Conversation> newConversations) async {
@@ -240,8 +280,6 @@ class ConversationProvider with ChangeNotifier {
 
   // Initialize conversations
   Future<void> loadConversations(List<Conversation> newConversations) async {
-    if (_isInitialized) return; // Prevent reloading if already initialized
-    
     // Clear existing conversations to prevent duplication
     _conversations.clear();
     _archivedConversations.clear();
@@ -634,9 +672,13 @@ class ConversationProvider with ChangeNotifier {
     return favoriteMessages;
   }
 
-  Future<void> refreshConversations() async {
-    print('Manual refresh requested'); // Debug log
-    await _smsService.refreshConversations();
+  void refreshConversations() async {
+    if (!_isInitialized) {
+      await _loadArchivedIds();
+      await _loadDeletedIds();
+      await _loadReadStatus();
+      _isInitialized = true;
+    }
   }
 
   Future<void> _saveArchivedIds() async {
