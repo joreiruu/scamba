@@ -212,20 +212,29 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
       !conversationProvider.deletedConversations.any((deleted) => deleted.id == conv.id)
     ).toList();
 
-    final filteredList = (isMainTab && filterProvider.filterHamMessages)
+    // For spam tab, filter spam messages within each conversation
+    final List<model.Conversation> processedConversations;
+    if (!isMainTab) {
+      processedConversations = filteredConversations.map((conv) {
+        return conv.copyWith(
+          messages: conv.messages.where((msg) => msg.isSpam).toList()
+        );
+      }).where((conv) => conv.messages.isNotEmpty).toList();
+    } else {
+      processedConversations = (filterProvider.filterHamMessages)
       ? filteredConversations.where((conv) => 
           !conv.messages.any((message) => message.isSpam)
         ).toList()
       : filteredConversations;
-
+    }
     return ListView.builder(
       key: PageStorageKey(isMainTab ? 'main_tab' : 'spam_tab'),
       controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
-      itemCount: filteredList.length,
+      itemCount: processedConversations.length,
       cacheExtent: 100, // Cache more items
       itemBuilder: (context, index) {
-        final conversation = filteredList[index];
+        final conversation = processedConversations[index];
         // Cache the last message to avoid repeated access
         final lastMessage = conversation.messages.isNotEmpty ? 
           conversation.messages.first : null;
