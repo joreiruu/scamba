@@ -476,37 +476,53 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
                         }
                       ),
                       
-                      if (message.isClassified && message.isSpam)  // Only show for spam
+                      if (message.isClassified)  // Changed to show for both spam and ham
                         Padding(
                           padding: const EdgeInsets.only(bottom: 12.0, top: 4.0),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Container(
-                                width: 150, // Increased from 100
-                                height: 10, // Increased from 6
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(5),  // Increased from 3
-                                  color: Colors.blue[200],
-                                ),
-                                child: FractionallySizedBox(
-                                  widthFactor: message.spamConfidence / 100,
-                                  alignment: Alignment.centerLeft,
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(5),  // Increased from 3
-                                      color: Colors.red,
+                              // Debug prints
+                              Builder(builder: (context) {
+                                // Debug prints
+                                final bool shouldBeSpam = message.spamConfidence > 50;
+                                if (shouldBeSpam != message.isSpam) {
+                                  print('WARNING: Message classification mismatch!');
+                                  print('Spam confidence: ${message.spamConfidence}');
+                                  print('Current classification: ${message.isSpam ? "Spam" : "Ham"}');
+                                  print('Should be: ${shouldBeSpam ? "Spam" : "Ham"}');
+                                }
+                                
+                                return Container(
+                                  width: 150,
+                                  height: 10,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(5),
+                                    color: message.isSpam ? Colors.red[100] : Colors.green[50],
+                                  ),
+                                  child: FractionallySizedBox(
+                                    widthFactor: message.spamConfidence > 50 
+                                      ? message.spamConfidence / 100
+                                      : (100 - message.spamConfidence) / 100,
+                                    alignment: Alignment.centerLeft,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(5),
+                                        color: message.isSpam ? Colors.red : Colors.green,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ),
-                              const SizedBox(width: 12), // Increased from 8
+                                );
+                              }),
+                              const SizedBox(width: 12),
                               Text(
-                                '${message.spamConfidence.toStringAsFixed(0)}% Spam',
+                                message.spamConfidence > 50
+                                  ? '${message.spamConfidence.toStringAsFixed(0)}% Spam'
+                                  : '${(100 - message.spamConfidence).toStringAsFixed(0)}% Ham',
                                 style: TextStyle(
-                                  fontSize: 14, // Increased from 12
-                                  color: Colors.red[700],
-                                  fontWeight: FontWeight.w600, // Made slightly bolder
+                                  fontSize: 14,
+                                  color: message.isSpam ? Colors.red[700] : Colors.green[700],
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ],
