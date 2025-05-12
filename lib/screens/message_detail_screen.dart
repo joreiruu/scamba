@@ -476,49 +476,39 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
                         }
                       ),
                       
-                      if (message.isClassified)  // Changed to show for both spam and ham
+                      if (message.isClassified)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 12.0, top: 4.0),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // Debug prints
-                              Builder(builder: (context) {
-                                // Debug prints
-                                final bool shouldBeSpam = message.spamConfidence > 50;
-                                if (shouldBeSpam != message.isSpam) {
-                                  print('WARNING: Message classification mismatch!');
-                                  print('Spam confidence: ${message.spamConfidence}');
-                                  print('Current classification: ${message.isSpam ? "Spam" : "Ham"}');
-                                  print('Should be: ${shouldBeSpam ? "Spam" : "Ham"}');
-                                }
-                                
-                                return Container(
-                                  width: 150,
-                                  height: 10,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(5),
-                                    color: message.isSpam ? Colors.red[100] : Colors.green[50],
-                                  ),
-                                  child: FractionallySizedBox(
-                                    widthFactor: message.spamConfidence > 50 
-                                      ? message.spamConfidence / 100
-                                      : (100 - message.spamConfidence) / 100,
-                                    alignment: Alignment.centerLeft,
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(5),
-                                        color: message.isSpam ? Colors.red : Colors.green,
+                              if (message.isSpam) // Only show confidence bar for spam
+                                Builder(builder: (context) {
+                                  return Container(
+                                    width: 150,
+                                    height: 10,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(5),
+                                      color: Colors.red[100],
+                                    ),
+                                    child: FractionallySizedBox(
+                                      widthFactor: message.spamConfidence / 100,
+                                      alignment: Alignment.centerLeft,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(5),
+                                          color: Colors.red,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                );
-                              }),
-                              const SizedBox(width: 12),
+                                  );
+                                }),
+                              if (message.isSpam)
+                                const SizedBox(width: 12),
                               Text(
-                                message.spamConfidence > 50
+                                message.isSpam 
                                   ? '${message.spamConfidence.toStringAsFixed(0)}% Spam'
-                                  : '${(100 - message.spamConfidence).toStringAsFixed(0)}% Ham',
+                                  : 'Ham',
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: message.isSpam ? Colors.red[700] : Colors.green[700],
