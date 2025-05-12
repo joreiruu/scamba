@@ -478,15 +478,15 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
                       
                       if (message.isClassified && message.isSpam)  // Only show for spam
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 8.0),
+                          padding: const EdgeInsets.only(bottom: 12.0, top: 4.0),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Container(
-                                width: 100,
-                                height: 6,
+                                width: 150, // Increased from 100
+                                height: 10, // Increased from 6
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(3),
+                                  borderRadius: BorderRadius.circular(5),  // Increased from 3
                                   color: Colors.blue[200],
                                 ),
                                 child: FractionallySizedBox(
@@ -494,19 +494,19 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
                                   alignment: Alignment.centerLeft,
                                   child: Container(
                                     decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(3),
+                                      borderRadius: BorderRadius.circular(5),  // Increased from 3
                                       color: Colors.red,
                                     ),
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                              const SizedBox(width: 12), // Increased from 8
                               Text(
                                 '${message.spamConfidence.toStringAsFixed(0)}% Spam',
                                 style: TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 14, // Increased from 12
                                   color: Colors.red[700],
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w600, // Made slightly bolder
                                 ),
                               ),
                             ],
