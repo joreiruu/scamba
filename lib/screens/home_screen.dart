@@ -221,11 +221,16 @@ class HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMi
         );
       }).where((conv) => conv.messages.isNotEmpty).toList();
     } else {
-      processedConversations = (filterProvider.filterHamMessages)
-      ? filteredConversations.where((conv) => 
-          !conv.messages.any((message) => message.isSpam)
-        ).toList()
-      : filteredConversations;
+      if (filterProvider.filterHamMessages) {
+        // For main tab with ham filter enabled
+        processedConversations = filteredConversations.map((conv) {
+          // Keep only ham messages for each conversation
+          final hamMessages = conv.messages.where((msg) => !msg.isSpam).toList();
+          return conv.copyWith(messages: hamMessages);
+        }).where((conv) => conv.messages.isNotEmpty).toList(); // Only keep conversations with ham messages
+      } else {
+        processedConversations = filteredConversations;
+      }
     }
     return ListView.builder(
       key: PageStorageKey(isMainTab ? 'main_tab' : 'spam_tab'),
